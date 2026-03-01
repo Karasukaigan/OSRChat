@@ -6,7 +6,7 @@
         translations: {},
 
         /**
-         * 获取用户浏览器当前语言
+         * Get user's browser current language
          */
         getBrowserLanguage() {
             const lang = navigator.language || navigator.userLanguage;
@@ -14,7 +14,7 @@
         },
 
         /**
-         * 将元素内容赋值给tr属性值
+         * Assign element content to tr attribute value
          */
         setTr() {
             document.querySelectorAll('[tr]').forEach(el => {
@@ -24,7 +24,7 @@
         },
 
         /**
-         * 将元素内容设置为tr属性值
+         * Set element content to tr attribute value
          */
         applyTr() {
             document.querySelectorAll('[tr]').forEach(el => {
@@ -34,7 +34,7 @@
         },
 
         /**
-         * 加载翻译文件
+         * Load translation file
          */
         load(url) {
             if (!url || typeof url !== 'string') {
@@ -61,7 +61,7 @@
         },
 
         /**
-         * 应用翻译
+         * Apply translations
          */
         apply() {
             if (!this.translations || Object.keys(this.translations).length === 0) return;
@@ -74,7 +74,7 @@
         },
 
         /**
-         * 翻译单个文本
+         * Translate single text
          */
         tr(key) {
             if (typeof key !== 'string') return String(key || '');
@@ -82,10 +82,10 @@
         }
     };
 
-    // 挂载到全局对象
+    // Mount to global object
     global.i18n = i18n;
 
-    // 模块化导出
+    // Module export
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = i18n;
     }
