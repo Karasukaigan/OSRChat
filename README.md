@@ -35,6 +35,12 @@ python server.py
 
 3. You can also scan a QR code with your mobile device to open the chat page. The QR code is available in the QR tab on the Settings page.
 
+## Suggestions
+
+1. If you plan to use Ollama, it is recommended to use the `huihui_ai/glm-4.7-flash-abliterated:q4_K_S` model (requires 22 GB of VRAM). Also, make sure to load the model once on the Ollama side before making a request, to avoid the first conversation getting stuck or becoming unresponsive.
+
+2. The current prompts are not perfect, so you may need to test and adjust them yourself.
+
 ## Contributing
 
 [Issues](https://github.com/Karasukaigan/OSRChat/issues) and [Pull Requests](https://github.com/Karasukaigan/OSRChat/pulls) are welcome to help improve this project.
