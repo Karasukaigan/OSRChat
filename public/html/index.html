@@ -176,7 +176,7 @@
         if (roleKey && Object.hasOwn(systemRoles, roleKey) && systemRoles[roleKey]) systemPrompt += String(systemRoles[roleKey]) + '\n';
         if (sceneKey && Object.hasOwn(scenes, sceneKey)) {
             if (scenes[sceneKey] && Object.hasOwn(scenes[sceneKey], 'system_prompt') && scenes[sceneKey]['system_prompt']) systemPrompt += String(scenes[sceneKey]['system_prompt']) + '\n';
-            if (scenes[sceneKey] && Object.hasOwn(scenes[sceneKey], 'context')) {
+            if (!chatStarted && scenes[sceneKey] && Object.hasOwn(scenes[sceneKey], 'context')) {
                 chatContext = [...scenes[sceneKey]['context']];
                 await renderChatContext(chatContext);
             }
