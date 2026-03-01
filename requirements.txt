@@ -1,0 +1,10 @@
+fastapi
+python-multipart
+uvicorn
+python-dotenv
+pyserial
+inputs
+requests
+openai
+Pillow
+pystray

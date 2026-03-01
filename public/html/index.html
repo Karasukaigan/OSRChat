@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title id="page-title" tr>Chat</title>
+    <link rel="icon" type="image/x-icon" href="/img/logo.png">
+    <link rel="stylesheet" href="/css/main.css">
+    <script src="/js/i18n.js"></script>
+    <script src="/js/marked.min.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <div class="prompt-info-section">
+            <div class="prompt-info-header" id="prompt-info-toggle">
+                <span tr>System Prompt</span>
+                <svg class="toggle-icon">
+                    <use xlink:href="/img/icons.svg#icon-toggle"></use>
+                </svg>
+            </div>
+            <div class="prompt-info-content" id="prompt-info-content">
+                <div id="prompt-info-text"></div>
+            </div>
+        </div>
+
+        <div class="navbar">
+            <select id="role-select">
+                <option value=""></option>
+            </select>
+            <select id="scene-select">
+                <option value=""></option>
+            </select>
+            <select id="mode-select">
+                <option value=""></option>
+            </select>
+            <button id="clear-button" class="stop">
+                <svg>
+                    <use xlink:href="/img/icons.svg#icon-clear"></use>
+                </svg>
+            </button>
+            <button id="undo-button" class="stop">
+                <svg>
+                    <use xlink:href="/img/icons.svg#icon-undo"></use>
+                </svg>
+            </button>
+            <button id="export-button">
+                <svg>
+                    <use xlink:href="/img/icons.svg#icon-export"></use>
+                </svg>
+            </button>
+            <button id="import-button">
+                <svg>
+                    <use xlink:href="/img/icons.svg#icon-import"></use>
+                </svg>
+            </button>
+            <input type="file" id="import-file-input" accept=".json" style="display: none;" />
+            <button id="settings-button">
+                <svg>
+                    <use xlink:href="/img/icons.svg#icon-settings"></use>
+                </svg>
+            </button>
+            <div id="llm-status" class="llm-status"></div>
+        </div>
+
+        <div class="chat-container">
+            <div class="chat-bubbles" id="chat-bubbles"></div>
+            <div class="input-area">
+                <textarea id="message-input" placeholder=""></textarea>
+                <div class="button-group">
+                    <button id="send-button">
+                        <svg>
+                            <use xlink:href="/img/icons.svg#icon-send"></use>
+                        </svg>
+                    </button>
+                    <button id="stop-button" class="stop">
+                        <svg>
+                            <use xlink:href="/img/icons.svg#icon-stop"></use>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+<script>
+    // i18n
+    var currentLanguage = "en";
+    const tr = (text) => currentLanguage === "en" ? text : i18n.tr(text);
+    document.addEventListener('DOMContentLoaded', async function () {
+        i18n.setTr();
+        currentLanguage = i18n.getBrowserLanguage();
+        if (currentLanguage !== "en") {
+            try {
+                await i18n.load(`/i18n/index_${currentLanguage}.json?t=${Date.now()}`);
+                i18n.apply();
+            } catch (error) { }
+        }
+    });
+</script>
+
+<script>
+    const updateLLMStatus = async () => {
+        const statusDiv = document.getElementById('llm-status');
+        if (!statusDiv) return;
+        try {
+            const res = await fetch('/api/llm/test?t=' + Date.now(), { method: 'GET' });
+            const data = await res.json();
+            
+            if (data.success) {
+                console.log(data);
+                statusDiv.textContent = tr('Connected');
+                statusDiv.className = 'llm-status connected';
+            } else {
+                statusDiv.textContent = tr('Disconnected');
+                statusDiv.className = 'llm-status disconnected';
+            }
+        } catch (error) {
+            console.error(error);
+            statusDiv.textContent = tr('Disconnected');
+            statusDiv.className = 'llm-status disconnected';
+        }
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(() => {
+            updateLLMStatus();
+        }, 2000);
+        setInterval(updateLLMStatus, 60000);
+    });
+</script>
+
+<script>
+    // Global variables
+    var systemRoles = {}; // System roles
+    var scenes = {}; // Scenes
+    var controlModes = {}; // Control modes
+
+    var systemPrompt = ""; // System prompt
+    var chatContext = []; // Context
+
+    var chatStarted = false; // Whether conversation has started
+
+    // System prompt info panel
+    const systemPromptInfoContent = document.getElementById('prompt-info-content');
+    const systemPromptInfoText = document.getElementById('prompt-info-text');
+    const toggleIcon = document.querySelector('.toggle-icon');
+
+    // Navigation bar
+    const roleSelect = document.getElementById('role-select');
+    const sceneSelect = document.getElementById('scene-select');
+    const modeSelect = document.getElementById('mode-select');
+
+    // Chat container
+    const chatBubbles = document.getElementById('chat-bubbles');
+    const messageInput = document.getElementById('message-input');
+    const sendButton = document.getElementById('send-button');
+    const stopButton = document.getElementById('stop-button');
+
+    // Clear context
+    const clearContext = () => {
+        if (abortController) return;
+        chatContext = [];
+        chatBubbles.innerHTML = '';
+    };
+
+    // Update system prompt
+    const updateSystemPrompt = async () => {
+        if (!chatStarted) clearContext();
+        systemPrompt = "";
+        const roleKey = roleSelect.value;
+        const sceneKey = sceneSelect.value;
+        const modeKey = modeSelect.value;
+        if (roleKey && Object.hasOwn(systemRoles, roleKey) && systemRoles[roleKey]) systemPrompt += String(systemRoles[roleKey]) + '\n';
+        if (sceneKey && Object.hasOwn(scenes, sceneKey)) {
+            if (scenes[sceneKey] && Object.hasOwn(scenes[sceneKey], 'system_prompt') && scenes[sceneKey]['system_prompt']) systemPrompt += String(scenes[sceneKey]['system_prompt']) + '\n';
+            if (scenes[sceneKey] && Object.hasOwn(scenes[sceneKey], 'context')) {
+                chatContext = [...scenes[sceneKey]['context']];
+                await renderChatContext(chatContext);
+            }
+        }
+        if (modeKey && Object.hasOwn(controlModes, modeKey) && controlModes[modeKey]) systemPrompt += String(controlModes[modeKey]);
+        systemPromptInfoText.textContent = systemPrompt;
+    }
+
+    // Listen to dropdown changes
+    roleSelect.addEventListener('change', updateSystemPrompt);
+    sceneSelect.addEventListener('change', updateSystemPrompt);
+    modeSelect.addEventListener('change', updateSystemPrompt);
+
+    // Collapse/expand
+    document.getElementById('prompt-info-toggle').addEventListener('click', () => {
+        if (systemPromptInfoContent.style.display === 'block') {
+            systemPromptInfoContent.style.display = 'none';
+            toggleIcon.classList.remove('rotated');
+        } else {
+            systemPromptInfoContent.style.display = 'block';
+            toggleIcon.classList.add('rotated');
+            updateSystemPrompt();
+        }
+    });
+
+    // Fetch JSON data
+    const fetchJson = async url => { try { const r = await fetch(url); if (!r.ok) return {}; const d = await r.json(); return d && typeof d == 'object' && !Array.isArray(d) ? d : {} } catch { return {} } };
+
+    // Populate dropdowns
+    const populateSelect = async (dict, selectElement, selectFirst = true, clear = false) => {
+        if (clear) selectElement.innerHTML = '<option value=""></option>';
+        const fragment = document.createDocumentFragment();
+        const keys = Object.keys(dict);
+        keys.forEach((key, index) => {
+            const option = document.createElement('option');
+            option.value = key;
+            option.textContent = key;
+            if (index === 0 && selectFirst) option.selected = true;
+            fragment.appendChild(option);
+        });
+        selectElement.appendChild(fragment);
+    };
+
+    document.addEventListener('DOMContentLoaded', async function () {
+        // Load roles, scenes, control modes
+        setTimeout(async () => {
+            t = Date.now();
+            systemRoles = await fetchJson('json/system_roles.json?t=' + t);
+            scenes = await fetchJson('json/scenes.json?t=' + t);
+            controlModes = await fetchJson('json/control_modes.json?t=' + t);
+            await populateSelect(systemRoles, roleSelect);
+            await populateSelect(scenes, sceneSelect);
+            await populateSelect(controlModes, modeSelect);
+            updateSystemPrompt();
+        }, 500);
+    });
+</script>
+
+<script>
+    // Render context
+    const renderChatContext = async (contextArray) => {
+        chatBubbles.innerHTML = '';
+        for (const msg of contextArray) {
+            if (typeof msg === 'object' && ['user', 'assistant'].includes(msg.role) && typeof msg.content === 'string') {
+                const bubble = document.createElement('div');
+                bubble.className = `bubble ${msg.role}`;
+
+                if (msg.role === 'assistant') {
+                    const scriptDict = extractDict(msg.content);
+                    bubble.innerHTML = marked.parse(removeDict(msg.content));
+                    if (Object.keys(scriptDict).length > 0) {
+                        const button = document.createElement('button');
+                        button.textContent = JSON.stringify(scriptDict);
+                        button.addEventListener('click', function () { sendCustom(scriptDict); });
+                        bubble.appendChild(button);
+                    }
+                } else {
+                    bubble.innerHTML = msg.content;
+                }
+
+                chatBubbles.appendChild(bubble);
+            }
+        }
+        chatBubbles.scrollTop = chatBubbles.scrollHeight;
+    };
+
+    // Settings
+    document.getElementById('settings-button').addEventListener('click', () => {
+        window.location.href = '/settings';
+    });
+
+    // Clear context
+    document.getElementById('clear-button').addEventListener('click', () => {
+        if (abortController) return;
+        clearContext();
+        chatStarted = false;
+    });
+
+    // Undo one conversation
+    document.getElementById('undo-button').addEventListener('click', () => {
+        if (abortController) return;
+        const bubbles = chatBubbles.querySelectorAll('.bubble');
+        if (bubbles.length >= 2 && chatContext.length >= 2) {
+            chatBubbles.removeChild(bubbles[bubbles.length - 1]);
+            chatBubbles.removeChild(bubbles[bubbles.length - 2]);
+            chatContext.splice(-2);
+            if (chatContext.length <= 1) chatStarted = false;
+        }
+    });
+
+    // Export context
+    document.getElementById('export-button').addEventListener('click', () => {
+        const roleSelectedKey = roleSelect.value;
+        const sceneSelectedKey = sceneSelect.value;
+        const modeSelectedKey = modeSelect.value;
+
+        const exportData = {
+            system_roles: roleSelectedKey ? { [roleSelectedKey]: systemRoles[roleSelectedKey] } : {},
+            scenes: sceneSelectedKey ? { [sceneSelectedKey]: scenes[sceneSelectedKey] } : {},
+            control_modes: modeSelectedKey ? { [modeSelectedKey]: controlModes[modeSelectedKey] } : {},
+            context: chatContext
+        };
+        const dataStr = JSON.stringify(exportData, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${Date.now()}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    });
+
+    // Import context
+    document.getElementById('import-button').addEventListener('click', () => {
+        document.getElementById('import-file-input').click();
+    });
+    const updateDict = (original, updates) => ({ ...original, ...updates });
+    document.getElementById('import-file-input').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        try {
+            const text = await file.text();
+            const imported = JSON.parse(text);
+            if (!imported || (typeof imported !== 'object')) throw new Error('Invalid import format: root must be an object');
+
+            // Update prompts
+            if (imported.system_roles && Object.keys(imported.system_roles).length > 0) {
+                systemRoles = updateDict(systemRoles, imported.system_roles);
+                populateSelect(systemRoles, roleSelect, false, true);
+                roleSelect.value = Object.keys(imported.system_roles)[0];
+            }
+            if (imported.scenes && Object.keys(imported.scenes).length > 0) {
+                scenes = updateDict(scenes, imported.scenes);
+                populateSelect(scenes, sceneSelect, false, true);
+                sceneSelect.value = Object.keys(imported.scenes)[0];
+            }
+            if (imported.control_modes && Object.keys(imported.control_modes).length > 0) {
+                controlModes = updateDict(controlModes, imported.control_modes);
+                populateSelect(controlModes, modeSelect, false, true);
+                modeSelect.value = Object.keys(imported.control_modes)[0];
+            }
+            updateSystemPrompt();
+
+            // Load context
+            const externalContext = Array.isArray(imported.context) ? imported.context : [];
+            chatContext = [...externalContext];
+            await renderChatContext(chatContext);
+
+            chatStarted = chatContext.length > 0;
+        } catch (err) {
+            console.error('Import failed:', err);
+        } finally {
+            e.target.value = '';
+        }
+    });
+</script>
+
+<script>
+    let abortController = null; // Used to abort conversation requests
+    let isDeviceMoving = false; // Whether device is moving
+
+    // Send message
+    async function sendMessage() {
+        if (abortController) return;
+        const content = messageInput.value.trim();
+        if (!content) return;
+        chatStarted = true;
+
+        abortController = new AbortController();
+
+        // Display user message
+        const userBubble = document.createElement('div');
+        userBubble.className = 'bubble user';
+        userBubble.textContent = content;
+        chatBubbles.appendChild(userBubble);
+        messageInput.value = '';
+
+        try {
+            const response = await fetch('/api/llm/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_message: content,
+                    context_messages: chatContext,
+                    system_prompt: systemPrompt
+                }),
+                signal: abortController.signal,
+            });
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let assistantBubble = document.createElement('div');
+            assistantBubble.className = 'bubble assistant';
+            chatBubbles.appendChild(assistantBubble);
+
+            let buffer = '';
+            let markdownContent = '';
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.slice(6));
+                            if (data.token) {
+                                markdownContent += data.token;
+                                if (data.token.includes("__THINKING_FINISHED__")) {
+                                    assistantBubble.innerHTML = '';
+                                    markdownContent = '';
+                                    const afterThinking = data.token.split("__THINKING_FINISHED__")[1];
+                                    if (afterThinking) {
+                                        assistantBubble.innerHTML += marked.parse(afterThinking);
+                                        markdownContent += afterThinking;
+                                    }
+                                } else {
+                                    assistantBubble.innerHTML = marked.parse(markdownContent);
+                                }
+                                chatBubbles.scrollTop = chatBubbles.scrollHeight;
+                                assistantBubble.offsetHeight;
+                            }
+                        } catch (e) {
+                            console.warn('Failed to parse SSE data:', line);
+                        }
+                    }
+                }
+            }
+
+            // Process remaining buffer
+            if (buffer.startsWith('data: ')) {
+                try {
+                    const data = JSON.parse(buffer.slice(6));
+                    if (data.token) {
+                        markdownContent += data.token;
+                        assistantBubble.innerHTML = marked.parse(markdownContent);
+                        chatBubbles.scrollTop = chatBubbles.scrollHeight;
+                    }
+                } catch (e) {
+                    console.warn('Failed to parse remaining SSE data:', buffer);
+                }
+            }
+
+            if (markdownContent.includes("STOP_TOY")) {
+                try {
+                    await fetch('/api/script/stop', { method: 'GET' });
+                } catch (error) { }
+                markdownContent = markdownContent.replace("STOP_TOY", "");
+            }
+            if (markdownContent.includes("DARK_THEME")) {
+                switchMainCSS('dark');
+                markdownContent = markdownContent.replace("DARK_THEME", "");
+            }
+            if (markdownContent.includes("LIGHT_THEME")) {
+                switchMainCSS();
+                markdownContent = markdownContent.replace("LIGHT_THEME", "");
+            }
+
+            // Process dictionary
+            const scriptDict = extractDict(markdownContent);
+            assistantBubble.innerHTML = marked.parse(removeDict(markdownContent));
+            if (Object.keys(scriptDict).length > 0) {
+                const isSent = await sendCustom(scriptDict);
+                if (isSent) {
+                    const button = document.createElement('button');
+                    button.textContent = JSON.stringify(scriptDict);
+                    button.addEventListener('click', function () { sendCustom(scriptDict); });
+                    assistantBubble.appendChild(button);
+                }
+            }
+
+            // Add this conversation to context
+            chatContext.push(
+                { role: "user", content: content },
+                { role: "assistant", content: markdownContent }
+            );
+        } catch (error) {
+            console.error('Failed to send message:', error);
+        } finally {
+            abortController = null;
+        }
+    }
+
+    // Extract dictionary from string
+    const extractDict = (str) => {
+        try {
+            const match = str.match(/\{.*\}/s);
+            if (match) return JSON.parse(match[0]);
+            return {};
+        } catch (error) {
+            return {};
+        }
+    };
+
+    // Validate format
+    const isValidFormat = o => o && typeof o == 'object' && Object.keys(o).length == 5 && ['max', 'min', 'freq', 'decline_ratio', 'loop_count'].every(k => k in o && typeof o[k] == 'number' && !isNaN(o[k]));
+    const isValidActions = a => Array.isArray(a) && a.length > 0 && a.every(i => i && typeof i === 'object' && 'at' in i && 'pos' in i && typeof i.at === 'number' && typeof i.pos === 'number' && isFinite(i.at) && isFinite(i.pos));
+
+    // Remove dictionary from string
+    const removeDict = (str) => {
+        try {
+            return str.replace(/\{.*\}/s, '').trim();
+        } catch (error) {
+            return str;
+        }
+    };
+
+    // /api/script/custom
+    async function sendCustom(scriptDict) {
+        if (isValidFormat(scriptDict)) {
+            try {
+                const response = await fetch('/api/script/custom', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        max_pos: scriptDict.max ?? 100,
+                        min_pos: scriptDict.min ?? 0,
+                        freq: scriptDict.freq ?? 1.0,
+                        decline_ratio: scriptDict.decline_ratio ?? 0.5,
+                        loop_count: scriptDict.loop_count ?? 100
+                    })
+                });
+                isDeviceMoving = true;
+                return true;
+            } catch (e) {
+                console.error(e);
+            }
+        } else if (Object.hasOwn(scriptDict, 'custom_actions') && isValidActions(scriptDict.custom_actions)) {
+            try {
+                const response = await fetch('/api/script/custom', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        loop_count: scriptDict.loop_count ?? 100,
+                        custom_actions: scriptDict.custom_actions
+                    })
+                });
+                isDeviceMoving = true;
+                return true;
+            } catch (e) {
+                console.error(e);
+            }
+        }
+        return false;
+    }
+
+    // Send button click event
+    sendButton.addEventListener('click', sendMessage);
+    messageInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            if (e.altKey || e.ctrlKey) {
+                // Alt+Enter or Ctrl+Enter for normal line break
+                const start = e.target.selectionStart;
+                const end = e.target.selectionEnd;
+                const value = e.target.value;
+                e.target.value = value.slice(0, start) + '\n' + value.slice(end);
+                e.target.setSelectionRange(start + 1, start + 1);
+                e.preventDefault();
+            } else {
+                // Enter to send message
+                e.preventDefault();
+                sendMessage();
+            }
+        }
+    });
+
+    // Stop button click event
+    stopButton.addEventListener('click', async () => {
+        // First click stops movement
+        if (isDeviceMoving) {
+            try {
+                await fetch('/api/script/stop', { method: 'GET' });
+            } catch (error) { }
+            isDeviceMoving = false;
+            return;
+        }
+
+        // Second click stops conversation
+        if (abortController) {
+            abortController.abort();
+            abortController = null;
+            const bubbles = chatBubbles.querySelectorAll('.bubble');
+            if (bubbles.length >= 2) {
+                chatBubbles.removeChild(bubbles[bubbles.length - 1]);
+                chatBubbles.removeChild(bubbles[bubbles.length - 2]);
+            }
+        }
+    });
+
+    // Switch stylesheet
+    const switchMainCSS = (suffix = '') => {
+        const link = document.querySelector('link[rel="stylesheet"][href^="/css/main"]');
+        if (!link) return;
+        const newHref = suffix
+            ? `/css/main_${suffix}.css?t=` + Date.now()
+            : `/css/main.css?t=` + Date.now();
+        if (link.href !== new URL(newHref, window.location.origin).href) link.href = newHref;
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+        // No operation for now
+    });
+</script>

@@ -1,0 +1,23 @@
+{
+  "Settings": "设置",
+  "UDP Address": "UDP地址",
+  "Serial Device": "串口设备",
+  "Work Mode": "工作模式",
+  "UDP Mode": "UDP模式",
+  "Serial Mode": "串口模式",
+  "Please select a serial device": "请选择串口设备",
+  "Save Settings": "保存设置",
+  "Joystick Control (for testing)": "手柄控制（测试用）",
+  "Failed to get current settings": "获取当前设置失败",
+  "Failed to retrieve serial port device list": "获取串口设备列表失败",
+  "Failed to start joystick control": "启动手柄控制失败",
+  "Joystick control started": "手柄控制已启动",
+  "Joystick control stopped": "手柄控制已停止",
+  "Joystick control operation failed": "手柄控制操作失败",
+  "Settings saved successfully": "设置保存成功",
+  "Failed to save settings": "保存设置失败",
+  "Base URL": "基础地址",
+  "API Key": "API密钥",
+  "Model": "模型",
+  "Go to Chat >": "前往对话 >"
+}

@@ -1,0 +1,310 @@
+/* main_dark.css */
+
+/* Global styles */
+body {
+    font-family: 'Microsoft Yahei', 'PingFang SC', Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #121212;
+    color: #e0e0e0;
+    user-select: none;
+}
+
+a {
+    color: #aaa;
+    text-decoration: none;
+    transition: color 0.1s ease;
+}
+
+a:hover {
+    color: #fff;
+}
+
+button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #2a2a2a;
+    color: #ccc;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.1s ease;
+    white-space: nowrap;
+}
+
+button:hover {
+    background-color: #333;
+}
+
+button svg { 
+    width: 16px;
+    min-width: 16px;
+    fill: #ccc;
+}
+
+select {
+    background-color: #1e1e1e;
+    color: #e0e0e0;
+    border: 1px solid #444;
+    border-radius: 8px;
+    font-size: 14px;
+    outline: none;
+}
+
+.container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* System prompt section */
+.prompt-info-section {
+    width: calc(100% - 40px);
+    margin: 20px 20px 0 20px;
+    border-radius: 8px;
+    overflow: hidden;
+    background-color: #1e1e1e;
+}
+
+.prompt-info-header {
+    padding: 10px 15px;
+    background-color: #2a2a2a;
+    color: #ccc;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.prompt-info-header:hover {
+    background-color: #333;
+}
+
+.prompt-info-content {
+    display: none;
+    padding: 10px 15px;
+    background-color: #2a2a2a;
+    max-height: 200px;
+    user-select: text;
+    overflow-y: auto;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.prompt-info-content::-webkit-scrollbar {
+    display: none;
+}
+
+.prompt-info-content div {
+    white-space: pre-wrap;
+    font-size: 12px;
+    color: #bbb;
+}
+
+.toggle-icon {
+    transition: transform 0.1s ease;
+    width: 18px;
+    min-width: 18px;
+    height: 18px;
+    color: #aaa;
+    fill: #aaa;
+}
+
+.toggle-icon.rotated {
+    transform: rotate(180deg);
+}
+
+/* Navigation bar */
+.navbar {
+    display: flex;
+    margin: 10px 20px 0 20px;
+    gap: 10px;
+    width: calc(100% - 40px);
+    justify-content: flex-start;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.navbar button { 
+    height: 28px;
+    width: 28px;
+    padding: 0 10px;
+}
+
+.navbar select {
+    padding: 5px 10px;
+}
+
+.chat-container {
+    width: calc(100% - 40px);
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    padding: 20px;
+    align-items: center;
+    overflow-y: hidden;
+}
+
+/* Chat bubbles */
+.chat-bubbles {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    overflow-y: auto;
+    margin-bottom: 20px;
+    user-select: text;
+    max-width: 1000px;
+    width: 100%;
+}
+
+.chat-bubbles::-webkit-scrollbar {
+    width: 6px;
+}
+
+.chat-bubbles::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.chat-bubbles::-webkit-scrollbar-thumb {
+    background-color: #555;
+    border-radius: 3px;
+}
+
+.chat-bubbles::-webkit-scrollbar-thumb:hover {
+    background-color: #777;
+}
+
+.bubble {
+    padding: 10px 15px;
+    margin-bottom: 10px;
+    border-radius: 10px;
+    word-wrap: break-word;
+    color: #e0e0e0;
+}
+
+.bubble p {
+    white-space: pre-wrap;
+}
+
+.bubble.user {
+    max-width: 85%;
+    background-color: #2a2a2a;
+    margin-left: auto;
+    margin-right: 5px;
+}
+
+.bubble.assistant {
+    max-width: calc(100% - 40px);
+    margin-left: 5px;
+    margin-right: auto;
+}
+
+.bubble.assistant:hover {
+    background-color: #2a2a2a;
+}
+
+.bubble button {
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 2px 4px;
+    font-size: 12px;
+    border-radius: 2px;
+    max-width: 80%;
+    margin-bottom: 10px;
+}
+
+/* Input area */
+.input-area {
+    position: relative;
+    display: flex;
+    gap: 10px;
+    max-width: 1000px;
+    width: 100%;
+}
+
+.input-area textarea {
+    font-family: 'Microsoft Yahei', 'PingFang SC', Arial, sans-serif;
+    flex-grow: 1;
+    padding: 10px 120px 10px 15px;
+    border: 1px solid #444;
+    border-radius: 20px;
+    resize: none;
+    font-size: 16px;
+    outline: none;
+    height: 48px;
+    color: #e0e0e0;
+    background-color: #1e1e1e;
+    word-break: break-all;
+    overflow-y: auto;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.input-area textarea::-webkit-scrollbar {
+    display: none;
+}
+
+.input-area .button-group {
+    position: absolute;
+    display: flex;
+    gap: 2px;
+    right: 10px;
+    bottom: 10px;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.input-area button {
+    color: #fff;
+    border: none;
+    border-radius: 0;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.1s;
+    height: 50px;
+    width: 50px;
+    background-color: #333;
+}
+
+.input-area button:hover {
+    background-color: #444;
+}
+
+.input-area button svg { 
+    width: 20px;
+    min-width: 20px;
+    fill: #fff;
+}
+
+.stop:hover,
+.input-area button.stop:hover {
+    background-color: #ff4d4d;
+    color: #fff;
+}
+
+.stop:hover svg,
+.input-area button:hover svg { 
+    fill: #fff;
+}
+
+.llm-status {
+    margin-left: auto;
+    padding: 0 5px;
+    font-size: 12px;
+    color: #bbb;
+    white-space: nowrap;
+}
+.llm-status.connected {
+    color: green;
+}
+.llm-status.disconnected {
+    color: red;
+}

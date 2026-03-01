@@ -1,0 +1,10 @@
+__pycache__
+.vscode
+/venv
+/test
+/build
+/dist
+/output
+main.spec
+setup.iss
+.env
