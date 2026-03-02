@@ -4,7 +4,7 @@ Retrieve the application version.
 
 **Example Response:**
 ```json
-{ "version": "OSRChat v1.0.0" }
+{ "version": "OSRChat v1.0.1" }
 ```
 
 ---
