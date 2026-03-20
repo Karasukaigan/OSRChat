@@ -13,16 +13,19 @@
 </head>
 
 <body>
-    <select id="language-toggle">
-        <option value="en">English</option>
-        <option value="zh">中文</option>
-    </select>
+    <div id="toast-container">
+        <div id="toast-message" class="toast-message"></div>
+    </div>
 
     <div class="tabs">
         <button class="tab-button active" data-tab="default">OSR</button>
         <button class="tab-button" data-tab="llm">LLM</button>
         <button class="tab-button" data-tab="qr">QR</button>
         <button class="tab-button" data-tab="api">API</button>
+        <select id="language-toggle">
+            <option value="en">English</option>
+            <option value="zh">中文</option>
+        </select>
     </div>
 
     <div class="tab-content active" id="default-tab">
@@ -63,8 +66,6 @@
 
                 <button type="submit" tr>Save Settings</button>
             </form>
-
-            <div id="statusMessage"></div>
         </div>
     </div>
 
@@ -85,7 +86,6 @@
                 </div>
                 <button type="submit" tr>Save Settings</button>
             </form>
-            <div id="llmStatusMessage"></div>
         </div>
         <a href="/" style="display: block; text-align: center;" tr>Go to Chat ></a>
     </div>
@@ -142,6 +142,19 @@
 </script>
 
 <script>
+    function showToast(message, type = 'info') {
+        const container = document.getElementById('toast-container');
+        const toast = document.getElementById('toast-message');
+        toast.textContent = message;
+        toast.className = 'toast-message ' + type;
+        container.classList.add('show');
+        setTimeout(() => {
+            container.classList.remove('show');
+        }, 3000);
+    }
+</script>
+
+<script>
     document.addEventListener('DOMContentLoaded', async function () {
         // Get current settings
         try {
@@ -172,7 +185,7 @@
                 joystickCheckbox.checked = false;
             }
         } catch (error) {
-            showStatus(`${tr("Failed to get current settings")}: ${error.message}`, 'error');
+            showToast(`${tr("Failed to get current settings")}: ${error.message}`, 'error');
         }
 
         // Get serial port device list
@@ -195,7 +208,7 @@
                 serialSelect.value = settings.serial_device;
             }
         } catch (error) {
-            showStatus(`${tr("Failed to retrieve serial port device list")}: ${error.message}`, 'error');
+            showToast(`${tr("Failed to retrieve serial port device list")}: ${error.message}`, 'error');
         }
     });
 
@@ -207,17 +220,17 @@
                 if (!response.ok) {
                     this.checked = false;
                     const errorData = await response.json().catch(() => ({}));
-                    showStatus(`${tr("Failed to start joystick control")}: ${errorData.detail || response.statusText}`, 'error');
+                    showToast(`${tr("Failed to start joystick control")}: ${errorData.detail || response.statusText}`, 'error');
                 } else {
-                    showStatus(tr("Joystick control started"), 'success');
+                    showToast(tr("Joystick control started"), 'success');
                 }
             } else {
                 await fetch('/api/devices/joystick/stop');
-                showStatus(tr("Joystick control stopped"), 'success');
+                showToast(tr("Joystick control stopped"), 'success');
             }
         } catch (error) {
             this.checked = !this.checked;
-            showStatus(`${tr("Joystick control operation failed")}: ${error.message}`, 'error');
+            showToast(`${tr("Joystick control operation failed")}: ${error.message}`, 'error');
         }
     });
 
@@ -242,7 +255,7 @@
 
             if (response.ok) {
                 const result = await response.json();
-                showStatus(tr("Settings saved successfully"), 'success');
+                showToast(tr("Settings saved successfully"), 'success');
 
                 // Update joystick control checkbox state
                 const joystickCheckbox = document.getElementById('joystickControl');
@@ -257,20 +270,9 @@
                 throw new Error(response.statusText);
             }
         } catch (error) {
-            showStatus(`${tr("Failed to save settings")}: ${error.message}`, 'error');
+            showToast(`${tr("Failed to save settings")}: ${error.message}`, 'error');
         }
     });
-
-    // Display status message
-    function showStatus(message, type) {
-        const statusDiv = document.getElementById('statusMessage');
-        statusDiv.textContent = message;
-        statusDiv.className = 'status ' + type;
-        setTimeout(() => {
-            statusDiv.textContent = '';
-            statusDiv.className = '';
-        }, 3000); // Clear after 3 seconds
-    }
 </script>
 
 <script>
@@ -321,24 +323,14 @@
 
             if (response.ok) {
                 const result = await response.json();
-                showLlmStatus(tr("Settings saved successfully"), 'success');
+                showToast(tr("Settings saved successfully"), 'success');
             } else {
                 throw new Error(response.statusText);
             }
         } catch (error) {
-            showLlmStatus(`${tr("Failed to save settings")}: ${error.message}`, 'error');
+            showToast(`${tr("Failed to save settings")}: ${error.message}`, 'error');
         }
     });
-
-    function showLlmStatus(message, type) {
-        const statusDiv = document.getElementById('llmStatusMessage');
-        statusDiv.textContent = message;
-        statusDiv.className = 'status ' + type;
-        setTimeout(() => {
-            statusDiv.textContent = '';
-            statusDiv.className = '';
-        }, 3000);
-    }
 </script>
 
 <script>

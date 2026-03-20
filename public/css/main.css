@@ -40,6 +40,7 @@ button:hover {
 button svg { 
     width: 16px;
     min-width: 16px;
+    height: 16px;
     fill: #555;
 }
 
@@ -185,6 +186,50 @@ select {
     border-radius: 10px;
     word-wrap: break-word;
     color: #000;
+    position: relative;
+}
+
+.bubble svg { 
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    min-width: 16px;
+    opacity: 0;
+    cursor: pointer;
+    transition: opacity 0.1s ease;
+    fill: #555;
+    z-index: 999;
+}
+
+.edit-icon {
+    top: 5px;
+    right: 5px;
+}
+
+.bubble:hover .edit-icon {
+    opacity: 1;
+}
+
+.edit-textarea {
+    max-width: 100%;
+    width: 1000px;
+    min-height: 200px;
+    padding: 10px 15px;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: inherit;
+    resize: vertical;
+    background-color: inherit;
+    color: inherit;
+    box-sizing: border-box;
+    outline: none;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.edit-textarea::-webkit-scrollbar {
+    display: none;
 }
 
 .bubble p {
@@ -277,6 +322,7 @@ select {
 .input-area button svg { 
     width: 20px;
     min-width: 20px;
+    height: 20px;
 }
 
 .stop:hover,

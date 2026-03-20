@@ -26,37 +26,37 @@
         </div>
 
         <div class="navbar">
-            <select id="role-select">
+            <select id="role-select" title="Role Prompt" tr-title>
                 <option value=""></option>
             </select>
-            <select id="scene-select">
+            <select id="scene-select" title="Scene Prompt" tr-title>
                 <option value=""></option>
             </select>
-            <select id="mode-select">
+            <select id="mode-select" title="Mode Prompt" tr-title>
                 <option value=""></option>
             </select>
-            <button id="clear-button" class="stop">
+            <button id="clear-button" class="stop" title="Clear Context" tr-title>
                 <svg>
                     <use xlink:href="/img/icons.svg#icon-clear"></use>
                 </svg>
             </button>
-            <button id="undo-button" class="stop">
+            <button id="undo-button" class="stop" title="Undo Last Message" tr-title>
                 <svg>
                     <use xlink:href="/img/icons.svg#icon-undo"></use>
                 </svg>
             </button>
-            <button id="export-button">
+            <button id="export-button" title="Export Context" tr-title>
                 <svg>
                     <use xlink:href="/img/icons.svg#icon-export"></use>
                 </svg>
             </button>
-            <button id="import-button">
+            <button id="import-button" title="Import Context" tr-title>
                 <svg>
                     <use xlink:href="/img/icons.svg#icon-import"></use>
                 </svg>
             </button>
             <input type="file" id="import-file-input" accept=".json" style="display: none;" />
-            <button id="settings-button">
+            <button id="settings-button" title="Settings" tr-title>
                 <svg>
                     <use xlink:href="/img/icons.svg#icon-settings"></use>
                 </svg>
@@ -108,7 +108,7 @@
         try {
             const res = await fetch('/api/llm/test?t=' + Date.now(), { method: 'GET' });
             const data = await res.json();
-            
+
             if (data.success) {
                 console.log(data);
                 statusDiv.textContent = tr('Connected');
@@ -246,13 +246,14 @@
 
                 if (msg.role === 'assistant') {
                     const scriptDict = extractDict(msg.content);
-                    bubble.innerHTML = marked.parse(removeDict(msg.content));
+                    bubble.innerHTML = marked.parse(processContext(msg.content));
                     if (Object.keys(scriptDict).length > 0) {
                         const button = document.createElement('button');
                         button.textContent = JSON.stringify(scriptDict);
                         button.addEventListener('click', function () { sendCustom(scriptDict); });
                         bubble.appendChild(button);
                     }
+                    addEditIcon(bubble);
                 } else {
                     bubble.innerHTML = msg.content;
                 }
@@ -444,24 +445,9 @@
                 }
             }
 
-            if (markdownContent.includes("STOP_TOY")) {
-                try {
-                    await fetch('/api/script/stop', { method: 'GET' });
-                } catch (error) { }
-                markdownContent = markdownContent.replace("STOP_TOY", "");
-            }
-            if (markdownContent.includes("DARK_THEME")) {
-                switchMainCSS('dark');
-                markdownContent = markdownContent.replace("DARK_THEME", "");
-            }
-            if (markdownContent.includes("LIGHT_THEME")) {
-                switchMainCSS();
-                markdownContent = markdownContent.replace("LIGHT_THEME", "");
-            }
-
             // Process dictionary
             const scriptDict = extractDict(markdownContent);
-            assistantBubble.innerHTML = marked.parse(removeDict(markdownContent));
+            assistantBubble.innerHTML = marked.parse(processContext(markdownContent));
             if (Object.keys(scriptDict).length > 0) {
                 const isSent = await sendCustom(scriptDict);
                 if (isSent) {
@@ -471,6 +457,16 @@
                     assistantBubble.appendChild(button);
                 }
             }
+
+            try {
+                if (markdownContent.includes("STOP_TOY")) await fetch('/api/script/stop', { method: 'GET' });
+                if (markdownContent.includes("DARK_THEME")) switchMainCSS('dark');
+                if (markdownContent.includes("LIGHT_THEME")) switchMainCSS();
+            } catch (e) {
+                console.error(e);
+            }
+
+            addEditIcon(assistantBubble);
 
             // Add this conversation to context
             chatContext.push(
@@ -508,7 +504,113 @@
         }
     };
 
-    // /api/script/custom
+    // Remove marks from string
+    const removeMarks = (
+        str,
+        marks = [
+            'STOP_TOY',
+            'DARK_THEME',
+            'LIGHT_THEME',
+            '```json',
+            '```', 
+        ]
+    ) => {
+        let result = str;
+        for (const mark of marks) {
+            result = result.split(mark).join('');
+        }
+        return result;
+    };
+
+    // Process context
+    const processContext = (context) => {
+        return removeMarks(removeDict(context));
+    }
+
+    // Enable edit mode for chat bubble
+    const enableEditMode = (bubble) => {
+        const bubbleIndex = Array.from(chatBubbles.children).indexOf(bubble);
+        if (bubbleIndex === -1) return;
+
+        const role = bubble.classList.contains('user') ? 'user' : 'assistant';
+        const originalContent = chatContext[bubbleIndex].content;
+
+        const textarea = document.createElement('textarea');
+        textarea.value = originalContent;
+        textarea.className = 'edit-textarea';
+
+        bubble.innerHTML = '';
+        bubble.appendChild(textarea);
+        textarea.focus();
+
+        const saveEdit = () => {
+            const newContent = textarea.value.trim();
+            if (newContent === originalContent) {
+                // No change, revert
+                revertBubble(bubble, role, originalContent);
+                return;
+            }
+
+            // Update context
+            chatContext[bubbleIndex].content = newContent;
+
+            // Re-render bubble
+            if (role === 'assistant') {
+                const scriptDict = extractDict(newContent);
+                bubble.innerHTML = marked.parse(processContext(newContent));
+                if (Object.keys(scriptDict).length > 0) {
+                    const button = document.createElement('button');
+                    button.textContent = JSON.stringify(scriptDict);
+                    button.addEventListener('click', function () { sendCustom(scriptDict); });
+                    bubble.appendChild(button);
+                }
+            } else {
+                bubble.innerHTML = newContent;
+            }
+
+            // Add edit icon back
+            addEditIcon(bubble);
+            bubble.className = `bubble ${role}`;
+        };
+
+        textarea.addEventListener('blur', saveEdit);
+        textarea.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                textarea.blur();
+            }
+        });
+    };
+
+    const revertBubble = (bubble, role, content) => {
+        if (role === 'assistant') {
+            const scriptDict = extractDict(content);
+            bubble.innerHTML = marked.parse(processContext(content));
+            if (Object.keys(scriptDict).length > 0) {
+                const button = document.createElement('button');
+                button.textContent = JSON.stringify(scriptDict);
+                button.addEventListener('click', function () { sendCustom(scriptDict); });
+                bubble.appendChild(button);
+            }
+        } else {
+            bubble.innerHTML = content;
+        }
+        addEditIcon(bubble);
+        bubble.className = `bubble ${role}`;
+    };
+
+    const addEditIcon = (bubble) => {
+        const editIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        editIcon.setAttribute('class', 'edit-icon');
+        editIcon.setAttribute('width', '16');
+        editIcon.setAttribute('height', '16');
+        editIcon.setAttribute('viewBox', '0 0 24 24');
+        const useElem = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+        useElem.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', '/img/icons.svg#icon-edit');
+        editIcon.appendChild(useElem);
+        bubble.appendChild(editIcon);
+    };
+
     async function sendCustom(scriptDict) {
         if (isValidFormat(scriptDict)) {
             try {
@@ -601,6 +703,12 @@
     };
 
     document.addEventListener('DOMContentLoaded', () => {
-        // No operation for now
+        // Click delegation for edit icons
+        chatBubbles.addEventListener('click', (e) => {
+            if (e.target.closest('.edit-icon')) {
+                const bubble = e.target.closest('.bubble');
+                if (bubble) enableEditMode(bubble);
+            }
+        });
     });
 </script>

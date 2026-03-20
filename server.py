@@ -20,9 +20,9 @@ from src.player import Player
 from src.joystick import JoystickController
 from src.llm_client import LLMClient
 
-version_info = "OSRChat v1.0.0"
+version_info = "OSRChat v1.1.0"
 PORT = 12333
-app = FastAPI(title="OSRChat", version="1.0.0")
+app = FastAPI(title="OSRChat", version="1.1.0")
 
 static_dirs = ["html", "css", "js", "img", "i18n", "json", "docs"]
 for dir_name in static_dirs:
@@ -63,8 +63,7 @@ async def get_version():
     """Get version information"""
     return {"version": version_info}
 
-@app.get("/api/host/ip")
-async def get_host_ip():
+def get_host_ip_address():
     """Get the current host's IP address"""
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
@@ -72,6 +71,12 @@ async def get_host_ip():
             ip = s.getsockname()[0]
     except Exception:
         ip = "127.0.0.1"
+    return ip
+
+@app.get("/api/host/ip")
+async def get_host_ip():
+    """Get the current host's IP address"""
+    ip = get_host_ip_address()
     return {"ip": ip}
 
 @app.get("/api/devices/serial")

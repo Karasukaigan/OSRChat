@@ -21,6 +21,9 @@
                 const textContent = el.textContent?.trim() || '';
                 if (textContent) el.setAttribute('tr', textContent);
             });
+            document.querySelectorAll('[tr-title]').forEach(el => {
+                if (el.hasAttribute('title')) el.setAttribute('tr-title', el.getAttribute('title'));
+            });
         },
 
         /**
@@ -31,27 +34,24 @@
                 const trValue = el.getAttribute('tr')?.trim();
                 if (trValue) el.textContent = trValue;
             });
+            document.querySelectorAll('[tr-title]').forEach(el => {
+                const trValue = el.getAttribute('tr-title')?.trim();
+                if (trValue) el.setAttribute('title', trValue);
+            });
         },
 
         /**
          * Load translation file
          */
         load(url) {
-            if (!url || typeof url !== 'string') {
-                return Promise.reject(new Error('Invalid URL provided to i18n.load()'));
-            }
-
+            if (!url || typeof url !== 'string') return Promise.reject(new Error('Invalid URL provided to i18n.load()'));
             return fetch(url)
                 .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`Failed to load translations: ${response.status} ${response.statusText}`);
-                    }
+                    if (!response.ok) throw new Error(`Failed to load translations: ${response.status} ${response.statusText}`);
                     return response.json();
                 })
                 .then(data => {
-                    if (typeof data !== 'object' || data === null) {
-                        throw new Error('Translation data must be a valid JSON object');
-                    }
+                    if (typeof data !== 'object' || data === null) throw new Error('Translation data must be a valid JSON object');
                     this.translations = data;
                 })
                 .catch(error => {
@@ -71,6 +71,12 @@
                 const translated = this.tr(originalText);
                 if (translated !== originalText) el.textContent = translated;
             });
+            document.querySelectorAll('[tr-title]').forEach(el => {
+                const originalText = el.getAttribute('tr-title')?.trim() || '';
+                if (!originalText) return;
+                const translated = this.tr(originalText);
+                if (translated !== originalText) el.setAttribute('title', translated);
+            });
         },
 
         /**
@@ -82,14 +88,8 @@
         }
     };
 
-    // Mount to global object
     global.i18n = i18n;
 
-    // Module export
-    if (typeof module !== 'undefined' && module.exports) {
-        module.exports = i18n;
-    }
-    if (typeof define === 'function' && define.amd) {
-        define(() => i18n);
-    }
+    if (typeof module !== 'undefined' && module.exports) module.exports = i18n;
+    if (typeof define === 'function' && define.amd) define(() => i18n);
 })(typeof window !== 'undefined' ? window : globalThis || this);

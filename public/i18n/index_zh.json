@@ -2,5 +2,13 @@
   "Chat": "对话",
   "System Prompt": "系统提示词",
   "Connected": "已连接",
-  "Disconnected": "未连接"
+  "Disconnected": "未连接",
+  "Role Prompt": "角色提示词",
+  "Scene Prompt": "场景提示词",
+  "Mode Prompt": "模式提示词",
+  "Clear Context": "清除上下文",
+  "Undo Last Message": "撤销最后一条消息",
+  "Export Context": "导出上下文",
+  "Import Context": "导入上下文",
+  "Settings": "设置"
 }
