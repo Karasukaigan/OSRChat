@@ -17,7 +17,7 @@
             <div class="prompt-info-header" id="prompt-info-toggle">
                 <span tr>System Prompt</span>
                 <svg class="toggle-icon">
-                    <use xlink:href="/img/icons.svg#icon-toggle"></use>
+                    <use xlink:href="/img/icons.svg?v=120#icon-toggle"></use>
                 </svg>
             </div>
             <div class="prompt-info-content" id="prompt-info-content">
@@ -26,39 +26,39 @@
         </div>
 
         <div class="navbar">
-            <select id="role-select" title="Role Prompt" tr-title>
+            <select id="role-select" title="System Role Prompt" tr-title>
                 <option value=""></option>
             </select>
-            <select id="scene-select" title="Scene Prompt" tr-title>
+            <select id="mode-select" title="Control Mode Prompt" tr-title>
                 <option value=""></option>
             </select>
-            <select id="mode-select" title="Mode Prompt" tr-title>
+            <select id="card-select" title="Character Card" tr-title>
                 <option value=""></option>
             </select>
             <button id="clear-button" class="stop" title="Clear Context" tr-title>
                 <svg>
-                    <use xlink:href="/img/icons.svg#icon-clear"></use>
+                    <use xlink:href="/img/icons.svg?v=120#icon-clear"></use>
                 </svg>
             </button>
             <button id="undo-button" class="stop" title="Undo Last Message" tr-title>
                 <svg>
-                    <use xlink:href="/img/icons.svg#icon-undo"></use>
+                    <use xlink:href="/img/icons.svg?v=120#icon-undo"></use>
                 </svg>
             </button>
             <button id="export-button" title="Export Context" tr-title>
                 <svg>
-                    <use xlink:href="/img/icons.svg#icon-export"></use>
+                    <use xlink:href="/img/icons.svg?v=120#icon-export"></use>
                 </svg>
             </button>
             <button id="import-button" title="Import Context" tr-title>
                 <svg>
-                    <use xlink:href="/img/icons.svg#icon-import"></use>
+                    <use xlink:href="/img/icons.svg?v=120#icon-import"></use>
                 </svg>
             </button>
             <input type="file" id="import-file-input" accept=".json" style="display: none;" />
             <button id="settings-button" title="Settings" tr-title>
                 <svg>
-                    <use xlink:href="/img/icons.svg#icon-settings"></use>
+                    <use xlink:href="/img/icons.svg?v=120#icon-settings"></use>
                 </svg>
             </button>
             <div id="llm-status" class="llm-status"></div>
@@ -71,12 +71,12 @@
                 <div class="button-group">
                     <button id="send-button">
                         <svg>
-                            <use xlink:href="/img/icons.svg#icon-send"></use>
+                            <use xlink:href="/img/icons.svg?v=120#icon-send"></use>
                         </svg>
                     </button>
                     <button id="stop-button" class="stop">
                         <svg>
-                            <use xlink:href="/img/icons.svg#icon-stop"></use>
+                            <use xlink:href="/img/icons.svg?v=120#icon-stop"></use>
                         </svg>
                     </button>
                 </div>
@@ -86,57 +86,42 @@
 </body>
 
 <script>
-    // i18n
-    var currentLanguage = "en";
-    const tr = (text) => currentLanguage === "en" ? text : i18n.tr(text);
-    document.addEventListener('DOMContentLoaded', async function () {
-        i18n.setTr();
-        currentLanguage = i18n.getBrowserLanguage();
-        if (currentLanguage !== "en") {
-            try {
-                await i18n.load(`/i18n/index_${currentLanguage}.json?t=${Date.now()}`);
-                i18n.apply();
-            } catch (error) { }
-        }
-    });
-</script>
-
-<script>
     const updateLLMStatus = async () => {
         const statusDiv = document.getElementById('llm-status');
         if (!statusDiv) return;
         try {
             const res = await fetch('/api/llm/test?t=' + Date.now(), { method: 'GET' });
             const data = await res.json();
-
             if (data.success) {
                 console.log(data);
-                statusDiv.textContent = tr('Connected');
+                statusDiv.textContent = i18n.tr('Connected');
                 statusDiv.className = 'llm-status connected';
             } else {
-                statusDiv.textContent = tr('Disconnected');
+                statusDiv.textContent = i18n.tr('Disconnected');
                 statusDiv.className = 'llm-status disconnected';
             }
         } catch (error) {
             console.error(error);
-            statusDiv.textContent = tr('Disconnected');
+            statusDiv.textContent = i18n.tr('Disconnected');
             statusDiv.className = 'llm-status disconnected';
         }
     };
 
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
+        await i18n.init("index", i18n.getBrowserLanguage());
+
         setTimeout(() => {
             updateLLMStatus();
         }, 2000);
-        setInterval(updateLLMStatus, 60000);
+        setInterval(updateLLMStatus, 600000);
     });
 </script>
 
 <script>
     // Global variables
     var systemRoles = {}; // System roles
-    var scenes = {}; // Scenes
     var controlModes = {}; // Control modes
+    var cards = {}; // Cards
 
     var systemPrompt = ""; // System prompt
     var chatContext = []; // Context
@@ -150,7 +135,7 @@
 
     // Navigation bar
     const roleSelect = document.getElementById('role-select');
-    const sceneSelect = document.getElementById('scene-select');
+    const cardSelect = document.getElementById('card-select');
     const modeSelect = document.getElementById('mode-select');
 
     // Chat container
@@ -169,25 +154,26 @@
     // Update system prompt
     const updateSystemPrompt = async () => {
         if (!chatStarted) clearContext();
-        systemPrompt = "";
+        systemPrompt = `## ${i18n.tr("System Role Settings")}\n\n`;
         const roleKey = roleSelect.value;
-        const sceneKey = sceneSelect.value;
+        const cardKey = cardSelect.value;
         const modeKey = modeSelect.value;
-        if (roleKey && Object.hasOwn(systemRoles, roleKey) && systemRoles[roleKey]) systemPrompt += String(systemRoles[roleKey]) + '\n';
-        if (sceneKey && Object.hasOwn(scenes, sceneKey)) {
-            if (scenes[sceneKey] && Object.hasOwn(scenes[sceneKey], 'system_prompt') && scenes[sceneKey]['system_prompt']) systemPrompt += String(scenes[sceneKey]['system_prompt']) + '\n';
-            if (!chatStarted && scenes[sceneKey] && Object.hasOwn(scenes[sceneKey], 'context')) {
-                chatContext = [...scenes[sceneKey]['context']];
+        if (roleKey && Object.hasOwn(systemRoles, roleKey) && systemRoles[roleKey]) systemPrompt += String(systemRoles[roleKey]);
+        if (modeKey && Object.hasOwn(controlModes, modeKey) && controlModes[modeKey]) systemPrompt += '\n\n' + String(controlModes[modeKey]);
+        if (cardKey && Object.hasOwn(cards, cardKey)) {
+            systemPrompt += `\n\n## ${i18n.tr("Scenario and Personality Settings")}\n\n`;
+            if (cards[cardKey] && Object.hasOwn(cards[cardKey], 'system_prompt') && cards[cardKey]['system_prompt']) systemPrompt += String(cards[cardKey]['system_prompt']);
+            if (!chatStarted && cards[cardKey] && Object.hasOwn(cards[cardKey], 'context')) {
+                chatContext = [...cards[cardKey]['context']];
                 await renderChatContext(chatContext);
             }
         }
-        if (modeKey && Object.hasOwn(controlModes, modeKey) && controlModes[modeKey]) systemPrompt += String(controlModes[modeKey]);
         systemPromptInfoText.textContent = systemPrompt;
     }
 
     // Listen to dropdown changes
     roleSelect.addEventListener('change', updateSystemPrompt);
-    sceneSelect.addEventListener('change', updateSystemPrompt);
+    cardSelect.addEventListener('change', updateSystemPrompt);
     modeSelect.addEventListener('change', updateSystemPrompt);
 
     // Collapse/expand
@@ -221,14 +207,14 @@
     };
 
     document.addEventListener('DOMContentLoaded', async function () {
-        // Load roles, scenes, control modes
+        // Load roles, cards, control modes
         setTimeout(async () => {
             t = Date.now();
             systemRoles = await fetchJson('json/system_roles.json?t=' + t);
-            scenes = await fetchJson('json/scenes.json?t=' + t);
+            cards = await fetchJson('json/cards.json?t=' + t);
             controlModes = await fetchJson('json/control_modes.json?t=' + t);
             await populateSelect(systemRoles, roleSelect);
-            await populateSelect(scenes, sceneSelect);
+            await populateSelect(cards, cardSelect);
             await populateSelect(controlModes, modeSelect);
             updateSystemPrompt();
         }, 500);
@@ -291,12 +277,12 @@
     // Export context
     document.getElementById('export-button').addEventListener('click', () => {
         const roleSelectedKey = roleSelect.value;
-        const sceneSelectedKey = sceneSelect.value;
+        const cardSelectedKey = cardSelect.value;
         const modeSelectedKey = modeSelect.value;
 
         const exportData = {
             system_roles: roleSelectedKey ? { [roleSelectedKey]: systemRoles[roleSelectedKey] } : {},
-            scenes: sceneSelectedKey ? { [sceneSelectedKey]: scenes[sceneSelectedKey] } : {},
+            cards: cardSelectedKey ? { [cardSelectedKey]: cards[cardSelectedKey] } : {},
             control_modes: modeSelectedKey ? { [modeSelectedKey]: controlModes[modeSelectedKey] } : {},
             context: chatContext
         };
@@ -332,10 +318,10 @@
                 populateSelect(systemRoles, roleSelect, false, true);
                 roleSelect.value = Object.keys(imported.system_roles)[0];
             }
-            if (imported.scenes && Object.keys(imported.scenes).length > 0) {
-                scenes = updateDict(scenes, imported.scenes);
-                populateSelect(scenes, sceneSelect, false, true);
-                sceneSelect.value = Object.keys(imported.scenes)[0];
+            if (imported.cards && Object.keys(imported.cards).length > 0) {
+                cards = updateDict(cards, imported.cards);
+                populateSelect(cards, cardSelect, false, true);
+                cardSelect.value = Object.keys(imported.cards)[0];
             }
             if (imported.control_modes && Object.keys(imported.control_modes).length > 0) {
                 controlModes = updateDict(controlModes, imported.control_modes);
@@ -512,7 +498,7 @@
             'DARK_THEME',
             'LIGHT_THEME',
             '```json',
-            '```', 
+            '```',
         ]
     ) => {
         let result = str;
@@ -574,12 +560,6 @@
         };
 
         textarea.addEventListener('blur', saveEdit);
-        textarea.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                textarea.blur();
-            }
-        });
     };
 
     const revertBubble = (bubble, role, content) => {
@@ -606,7 +586,7 @@
         editIcon.setAttribute('height', '16');
         editIcon.setAttribute('viewBox', '0 0 24 24');
         const useElem = document.createElementNS('http://www.w3.org/2000/svg', 'use');
-        useElem.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', '/img/icons.svg#icon-edit');
+        useElem.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', '/img/icons.svg?v=120#icon-edit');
         editIcon.appendChild(useElem);
         bubble.appendChild(editIcon);
     };

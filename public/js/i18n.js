@@ -18,7 +18,7 @@
          */
         setTr() {
             document.querySelectorAll('[tr]').forEach(el => {
-                const textContent = el.textContent?.trim() || '';
+                let textContent = el.textContent?.trim() || '';
                 if (textContent) el.setAttribute('tr', textContent);
             });
             document.querySelectorAll('[tr-title]').forEach(el => {
@@ -85,6 +85,21 @@
         tr(key) {
             if (typeof key !== 'string') return String(key || '');
             return this.translations[key?.trim()] || key;
+        },
+
+        /**
+         * Initialize i18n
+         */
+        async init(prefix, lang = "en") {
+            if (lang !== "en") {
+                try {
+                    this.setTr();
+                    await this.load(`/i18n/${prefix}_${lang}.json?t=${Date.now()}`);
+                    this.apply();
+                } catch (e) {
+                    console.error(e);
+                }
+            }
         }
     };
 

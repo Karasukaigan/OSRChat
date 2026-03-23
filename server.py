@@ -20,13 +20,15 @@ from src.player import Player
 from src.joystick import JoystickController
 from src.llm_client import LLMClient
 
-version_info = "OSRChat v1.1.0"
+version_info = "OSRChat v1.2.0"
 PORT = 12333
-app = FastAPI(title="OSRChat", version="1.1.0")
+app = FastAPI(title="OSRChat", version="1.2.0")
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+public_dir = os.path.join(BASE_DIR, "public")
 static_dirs = ["html", "css", "js", "img", "i18n", "json", "docs"]
 for dir_name in static_dirs:
-    app.mount(f"/{dir_name}", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "public", dir_name)), name=dir_name)
+    app.mount(f"/{dir_name}", StaticFiles(directory=os.path.join(public_dir, dir_name)), name=dir_name)
 
 player = Player()
 player.udp_url = os.getenv("UDP_URL", None)
@@ -47,14 +49,14 @@ llm_client = LLMClient(
 @app.get("/")
 async def read_index():
     """Main route"""
-    index_path = os.path.join(os.path.dirname(__file__), "public", "html", "index.html")
+    index_path = os.path.join(public_dir, "html", "index.html")
     if os.path.exists(index_path):
         return FileResponse(index_path)
     
 @app.get("/settings")
 async def read_settings():
     """Settings page"""
-    index_path = os.path.join(os.path.dirname(__file__), "public", "html", "settings.html")
+    index_path = os.path.join(public_dir, "html", "settings.html")
     if os.path.exists(index_path):
         return FileResponse(index_path)
     
@@ -133,7 +135,6 @@ async def set_llm_config(
     model: str = Body("")
 ):
     """Configure LLM client"""
-    print(base_url, api_key, model)
     if base_url and base_url != llm_client.base_url:
         set_key(".env", "BASE_URL", base_url)
     if api_key != llm_client.api_key or api_key == "":
@@ -157,6 +158,68 @@ async def get_llm_config():
         "api_key": llm_client.api_key,
         "model": llm_client.model
     }
+
+def load_cards():
+    cards_path = os.path.join(public_dir, "json", "cards.json")
+    if os.path.exists(cards_path):
+        with open(cards_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    else:
+        os.makedirs(os.path.dirname(cards_path), exist_ok=True)
+        with open(cards_path, 'w', encoding='utf-8') as f:
+            json.dump({}, f, ensure_ascii=False, indent=2)
+    return {}
+
+def save_cards(cards):
+    cards_path = os.path.join(public_dir, "json", "cards.json")
+    with open(cards_path, 'w', encoding='utf-8') as f:
+        json.dump(cards, f, ensure_ascii=False, indent=2)
+
+@app.post("/api/cards")
+async def create_card(
+    name: str = Body(...),
+    prompt: str = Body(""),
+    content: str = Body("")
+):
+    """Create a new card"""
+    cards = load_cards()
+    if name in cards:
+        raise HTTPException(status_code=400, detail="card already exists")
+    card = {"system_prompt": prompt}
+    if content:
+        card["context"] = [{"role": "assistant", "content": content}]
+    cards[name] = card
+    save_cards(cards)
+    return {"message": "card created successfully"}
+
+@app.put("/api/cards/{name}")
+async def update_card(
+    name: str,
+    prompt: str = Body(""),
+    content: str = Body("")
+):
+    """Update an existing card"""
+    cards = load_cards()
+    if name not in cards:
+        raise HTTPException(status_code=404, detail="card not found")
+    card = {"system_prompt": prompt}
+    if content:
+        card["context"] = [{"role": "assistant", "content": content}]
+    else:
+        card.pop("context", None)
+    cards[name] = card
+    save_cards(cards)
+    return {"message": "card updated successfully"}
+
+@app.delete("/api/cards/{name}")
+async def delete_card(name: str):
+    """Delete a card"""
+    cards = load_cards()
+    if name not in cards:
+        raise HTTPException(status_code=404, detail="card not found")
+    del cards[name]
+    save_cards(cards)
+    return {"message": "card deleted successfully"}
 
 @app.post("/api/script")
 async def load(script_data: dict):
@@ -223,14 +286,14 @@ async def adjust_offset(ms: int = Query(..., description="Offset adjustment valu
         "adjustment": ms
     }
 
-@app.get("/api/devices/joystick/start")
+@app.post("/api/devices/joystick/start")
 async def start_joystick():
     """Start joystick control"""
     player.stop()
     result = joystick_controller.start_joystick()
     return result
 
-@app.get("/api/devices/joystick/stop")
+@app.post("/api/devices/joystick/stop")
 async def stop_joystick():
     """Stop joystick control"""
     result = joystick_controller.stop_joystick()
@@ -298,7 +361,6 @@ async def chat_with_llm(
         try:
             while True:
                 if await request.is_disconnected():
-                    print("Client disconnected, stopping LLM generation.")
                     stop_event.set()
                     break
 
@@ -321,7 +383,7 @@ async def chat_with_llm(
 
 def create_image():
     """Create tray icon from public/img/logo.png"""
-    logo_path = os.path.join(os.path.dirname(__file__), "public", "img", "logo.png")
+    logo_path = os.path.join(public_dir, "img", "logo.png")
     try:
         image = Image.open(logo_path).convert("RGBA")
         image = image.resize((256, 256), Image.LANCZOS)

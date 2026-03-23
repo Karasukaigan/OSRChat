@@ -124,6 +124,9 @@ class LLMClient:
                 temperature=temperature,
                 max_tokens=num_predict,
                 stream=True,
+                stream_options={
+                    "include_usage": True
+                },
                 extra_body={
                     "think": think,
                     "enable_thinking": think

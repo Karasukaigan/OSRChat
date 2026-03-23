@@ -256,7 +256,6 @@ class Player:
                 "inverted": inverted,
                 "actions": self.generate_actions(max_pos=max_pos, min_pos=min_pos, freq=freq, decline_ratio=decline_ratio, start_pos=start_pos, loop_count=loop_count, custom_actions=custom_actions)
             }
-            # print(custom_funscript)
             self.stop()
             time.sleep(0.5)
             self.load_script(custom_funscript)

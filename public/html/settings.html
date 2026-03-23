@@ -5,27 +5,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title id="page-title" tr>Settings</title>
-    <link rel="icon" type="image/x-icon" href="/img/logo.png">
+    <link rel="icon" href="/img/logo.png">
     <link rel="stylesheet" href="/css/settings.css">
     <script src="/js/i18n.js"></script>
+    <script src="/js/toast.js"></script>
     <script src="/js/marked.min.js"></script>
     <script src="/js/qrcode.min.js"></script>
 </head>
 
 <body>
-    <div id="toast-container">
-        <div id="toast-message" class="toast-message"></div>
-    </div>
-
     <div class="tabs">
         <button class="tab-button active" data-tab="default">OSR</button>
         <button class="tab-button" data-tab="llm">LLM</button>
+        <button class="tab-button" data-tab="cards">CARDS</button>
         <button class="tab-button" data-tab="qr">QR</button>
         <button class="tab-button" data-tab="api">API</button>
-        <select id="language-toggle">
-            <option value="en">English</option>
-            <option value="zh">中文</option>
-        </select>
     </div>
 
     <div class="tab-content active" id="default-tab">
@@ -90,14 +84,33 @@
         <a href="/" style="display: block; text-align: center;" tr>Go to Chat ></a>
     </div>
 
-    <div class="tab-content" id="qr-tab" style="min-width: auto;">
+    <div class="tab-content" id="cards-tab" style="width: 100%;">
+        <div class="container" style="height: calc(100vh - 180px);">
+            <div class="cards-tab-header">
+                <input type="text" id="card-name-input" placeholder="" style="flex: 1;">
+                <button id="new-card-button" style="width: auto;">
+                    <svg>
+                        <use xlink:href="/img/icons.svg?v=120#icon-add"></use>
+                    </svg>
+                </button>
+                <button id="import-card-button" style="width: auto;">
+                    <svg>
+                        <use xlink:href="/img/icons.svg?v=120#icon-import"></use>
+                    </svg>
+                </button>
+            </div>
+            <div id="cards-list"></div>
+        </div>
+    </div>
+
+    <div class="tab-content" id="qr-tab" style="min-width: auto; width: auto;">
         <div class="container">
             <div id="qr-code"></div>
             <div id="qr-url" style="user-select: text;"></div>
         </div>
     </div>
 
-    <div class="tab-content" id="api-tab">
+    <div class="tab-content" id="api-tab" style="width: 100%;">
         <div class="container">
             <div id="api-doc-content" style="user-select: text;"></div>
         </div>
@@ -105,251 +118,435 @@
 </body>
 
 <script>
-    // i18n
-    var currentLanguage = "en";
-    var isLanguageLoading = false;
-    document.addEventListener('DOMContentLoaded', async function () {
-        i18n.setTr();
-        currentLanguage = i18n.getBrowserLanguage();
-
-        document.getElementById('language-toggle').addEventListener('change', async function () {
-            if (isLanguageLoading) return;
-            isLanguageLoading = true;
-
-            currentLanguage = this.value;
-            try {
-                if (currentLanguage === "en") {
-                    i18n.applyTr();
-                } else {
-                    await i18n.load(`/i18n/settings_${currentLanguage}.json?t=${Date.now()}`);
-                    i18n.apply();
-                }
-            } catch (error) {
-                console.error(error);
-            } finally {
-                isLanguageLoading = false;
+    // Send request and show bubble message
+    const fetchWithToast = async (url, options = {}, successMsg, errorMsg) => {
+        try {
+            const response = await fetch(url, options);
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.detail || response.statusText);
             }
-        });
-
-        if (i18n.getBrowserLanguage() !== 'en') {
-            const languageToggle = document.getElementById('language-toggle');
-            languageToggle.value = i18n.getBrowserLanguage();
-            languageToggle.dispatchEvent(new Event('change'));
+            const data = await response.json().catch(() => ({}));
+            if (successMsg) toast.show(i18n.tr(successMsg), 'success');
+            return data;
+        } catch (error) {
+            const msg = errorMsg ? i18n.tr(errorMsg) : i18n.tr("Operation failed");
+            toast.show(`${msg}: ${error.message}`, 'error');
+            throw error;
         }
+    };
+
+    // Get current settings
+    const getConfig = async () =>
+        fetchWithToast(`/api/config?t=${Date.now()}`, {}, null, "Failed to get current settings");
+
+    // Update joystick control checkbox state
+    const updateJoystickCheckboxState = async (mode) => {
+        const c = document.getElementById('joystickControl');
+        if (mode === 'serial') {
+            c.disabled = false;
+            try { c.checked = (await (await fetch('/api/devices/joystick')).json()).running; }
+            catch { c.checked = false; }
+        } else {
+            c.disabled = true;
+            c.checked = false;
+            try { await fetch('/api/devices/joystick/stop', { method: 'POST' }); } catch { }
+        }
+    };
+
+    // Escape HTML
+    const escapeHtml = (t) => (div => (div.textContent = t, div.innerHTML))(document.createElement('div'));
+
+    // Generate card name
+    const generateCardName = () => {
+        const d = new Date();
+        return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}${String(d.getSeconds()).padStart(2, '0')}${String(d.getMilliseconds()).padStart(3, '0')}`;
+    };
+
+    // Check card data structure
+    const isValidStructure = (obj) => {
+        if (typeof obj !== 'object' || !obj || !Object.keys(obj).length) return false;
+        return Object.values(obj).every(item =>
+            item && typeof item === 'object' &&
+            typeof item.system_prompt === 'string' &&
+            (item.context === undefined || (Array.isArray(item.context) && item.context.length &&
+                item.context.every(ctx =>
+                    ctx && typeof ctx === 'object' &&
+                    (ctx.role === 'assistant' || ctx.role === 'user') &&
+                    typeof ctx.content === 'string' && ctx.content.trim()
+                )
+            ))
+        );
+    };
+</script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', async () => {
+        await i18n.init("settings", i18n.getBrowserLanguage());
+        toast.init();
     });
 
-    const tr = (text) => currentLanguage === "en" ? text : i18n.tr(text);
+    // Tab page switching
+    document.querySelectorAll('.tab-button').forEach(b => b.addEventListener('click', function () {
+        const t = this.getAttribute('data-tab');
+        document.querySelectorAll('.tab-button,.tab-content').forEach(e => e.classList.remove('active'));
+        this.classList.add('active');
+        document.getElementById(`${t}-tab`).classList.add('active');
+    }));
 </script>
 
 <script>
-    function showToast(message, type = 'info') {
-        const container = document.getElementById('toast-container');
-        const toast = document.getElementById('toast-message');
-        toast.textContent = message;
-        toast.className = 'toast-message ' + type;
-        container.classList.add('show');
-        setTimeout(() => {
-            container.classList.remove('show');
-        }, 3000);
-    }
-</script>
-
-<script>
-    document.addEventListener('DOMContentLoaded', async function () {
-        // Get current settings
+    async function loadSettings() {
         try {
-            const settingsResponse = await fetch('/api/config?t=' + Date.now());
-            const settings = await settingsResponse.json();
-
+            const settings = await getConfig();
             if (settings.udp_url) document.getElementById('udpUrl').value = settings.udp_url;
-            if (settings.mode) document.querySelector(`input[name="mode"][value="${settings.mode}"]`).checked = true;
-
-            // Set joystick control checkbox state
-            const joystickCheckbox = document.getElementById('joystickControl');
-            if (settings.mode === 'serial') {
-                joystickCheckbox.disabled = false;
-                try {
-                    const joystickStatusResponse = await fetch('/api/devices/joystick');
-                    const joystickStatus = await joystickStatusResponse.json();
-                    joystickCheckbox.checked = joystickStatus.running;
-                } catch (joystickError) {
-                    console.error('Failed to get joystick status:', joystickError);
-                    joystickCheckbox.checked = false;
-                }
-            } else {
-                try {
-                    await fetch('/api/devices/joystick/stop');
-                }
-                catch (error) { }
-                joystickCheckbox.disabled = true;
-                joystickCheckbox.checked = false;
+            if (settings.mode) {
+                document.querySelector(`input[name="mode"][value="${settings.mode}"]`).checked = true;
+                await updateJoystickCheckboxState(settings.mode);
             }
         } catch (error) {
-            showToast(`${tr("Failed to get current settings")}: ${error.message}`, 'error');
+            console.error('Failed to load settings:', error);
         }
+    }
 
-        // Get serial port device list
+    async function loadSerialDevices() {
         try {
-            const serialResponse = await fetch('/api/devices/serial');
-            const serialData = await serialResponse.json();
-
-            const serialSelect = document.getElementById('serialDevice');
-            serialData.serial_ports.forEach(port => {
+            const response = await fetch('/api/devices/serial');
+            const data = await response.json();
+            const select = document.getElementById('serialDevice');
+            data.serial_ports.forEach(port => {
                 const option = document.createElement('option');
                 option.value = port.device;
                 option.textContent = `${port.device} - ${port.description}`;
-                serialSelect.appendChild(option);
+                select.appendChild(option);
             });
-
-            // Set currently selected serial device
-            const settingsResponse = await fetch('/api/config?t=' + Date.now());
-            const settings = await settingsResponse.json();
-            if (settings.serial_device) {
-                serialSelect.value = settings.serial_device;
-            }
+            const settings = await getConfig();
+            if (settings.serial_device) select.value = settings.serial_device;
         } catch (error) {
-            showToast(`${tr("Failed to retrieve serial port device list")}: ${error.message}`, 'error');
+            toast.show(`${i18n.tr("Failed to retrieve serial port device list")}: ${error.message}`, 'error');
         }
-    });
+    }
 
-    // Joystick control checkbox listener
+    async function loadLlmConfig() {
+        try {
+            const response = await fetch('/api/config/llm?t=' + Date.now());
+            const config = await response.json();
+
+            if (config.base_url) document.getElementById('baseUrl').value = config.base_url;
+            if (config.api_key) document.getElementById('apiKey').value = config.api_key;
+            if (config.model) document.getElementById('model').value = config.model;
+        } catch (error) {
+            console.error('Failed to load LLM config:', error);
+        }
+    }
+
+    // Joystick control
     document.getElementById('joystickControl').addEventListener('change', async function () {
         try {
             if (this.checked) {
-                const response = await fetch('/api/devices/joystick/start');
-                if (!response.ok) {
-                    this.checked = false;
-                    const errorData = await response.json().catch(() => ({}));
-                    showToast(`${tr("Failed to start joystick control")}: ${errorData.detail || response.statusText}`, 'error');
-                } else {
-                    showToast(tr("Joystick control started"), 'success');
-                }
+                await fetchWithToast('/api/devices/joystick/start', { method: 'POST' },
+                    'Joystick control started', 'Failed to start joystick control');
             } else {
-                await fetch('/api/devices/joystick/stop');
-                showToast(tr("Joystick control stopped"), 'success');
+                await fetchWithToast('/api/devices/joystick/stop', { method: 'POST' },
+                    'Joystick control stopped', '');
             }
         } catch (error) {
             this.checked = !this.checked;
-            showToast(`${tr("Joystick control operation failed")}: ${error.message}`, 'error');
         }
     });
 
-    // Form submission handling
+    // Update OSR settings
     document.getElementById('settingsForm').addEventListener('submit', async function (e) {
         e.preventDefault();
-
         const mode = document.querySelector('input[name="mode"]:checked').value;
         const udpUrl = document.getElementById('udpUrl').value.trim();
         const serialDevice = document.getElementById('serialDevice').value;
-
-        // Build parameters
         const params = new URLSearchParams();
         params.append('m', mode);
         if (udpUrl) params.append('u', udpUrl);
         if (serialDevice) params.append('s', serialDevice);
-
         try {
-            const response = await fetch(`/api/config?${params.toString()}`, {
-                method: 'POST'
-            });
-
-            if (response.ok) {
-                const result = await response.json();
-                showToast(tr("Settings saved successfully"), 'success');
-
-                // Update joystick control checkbox state
-                const joystickCheckbox = document.getElementById('joystickControl');
-                if (result.mode === 'serial') {
-                    joystickCheckbox.disabled = false;
-                } else {
-                    joystickCheckbox.disabled = true;
-                    joystickCheckbox.checked = false;
-                    await fetch('/api/devices/joystick/stop');
-                }
-            } else {
-                throw new Error(response.statusText);
-            }
-        } catch (error) {
-            showToast(`${tr("Failed to save settings")}: ${error.message}`, 'error');
-        }
-    });
-</script>
-
-<script>
-    // Tab switching
-    document.querySelectorAll('.tab-button').forEach(button => {
-        button.addEventListener('click', function () {
-            const tabId = this.getAttribute('data-tab');
-            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-            this.classList.add('active');
-            document.getElementById(`${tabId}-tab`).classList.add('active');
-        });
-    });
-
-    document.addEventListener('DOMContentLoaded', async function () {
-        // Get current LLM configuration
-        try {
-            const llmConfigResponse = await fetch('/api/config/llm?t=' + Date.now());
-            const llmConfig = await llmConfigResponse.json();
-
-            if (llmConfig.base_url) document.getElementById('baseUrl').value = llmConfig.base_url;
-            if (llmConfig.api_key) document.getElementById('apiKey').value = llmConfig.api_key;
-            if (llmConfig.model) document.getElementById('model').value = llmConfig.model;
+            await fetchWithToast(
+                `/api/config?${params.toString()}`, { method: 'POST' },
+                'Settings saved successfully', 'Failed to save settings');
+            await updateJoystickCheckboxState(mode);
         } catch (error) { }
     });
 
-    // Save LLM configuration
+    // Update LLM settings
     document.getElementById('llmConfigForm').addEventListener('submit', async function (e) {
         e.preventDefault();
-
         const baseUrl = document.getElementById('baseUrl').value.trim();
         const apiKey = document.getElementById('apiKey').value.trim();
         const model = document.getElementById('model').value.trim();
-
         const requestBody = {};
         if (baseUrl) requestBody.base_url = baseUrl;
         if (apiKey) requestBody.api_key = apiKey;
         if (model) requestBody.model = model;
-
-        try {
-            const response = await fetch('/api/config/llm', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(requestBody)
-            });
-
-            if (response.ok) {
-                const result = await response.json();
-                showToast(tr("Settings saved successfully"), 'success');
-            } else {
-                throw new Error(response.statusText);
-            }
-        } catch (error) {
-            showToast(`${tr("Failed to save settings")}: ${error.message}`, 'error');
-        }
+        await fetchWithToast('/api/config/llm', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+        }, 'Settings saved successfully', 'Failed to save settings');
     });
 </script>
 
 <script>
-    // QR code
-    const getHostIP = async () => {
+    // Unified handling of card click events
+    document.addEventListener('click', (e) => {
+        // Expand, hide cards
+        if (e.target.closest('.card-header') &&
+            !e.target.closest('.card-delete,.card-delete-confirm,.card-export')) {
+            const header = e.target.closest('.card-header');
+            const content = header.closest('.card-item').querySelector('.card-content');
+            content.style.display = content.style.display === 'none' ? 'flex' : 'none';
+        }
+
+        // Update card
+        if (e.target.closest('.card-save')) {
+            e.preventDefault();
+            e.stopPropagation();
+            const btn = e.target.closest('.card-save');
+            const cardItem = btn.closest('.card-item');
+            const header = cardItem.querySelector('.card-header');
+            const name = header.querySelector('.card-name').textContent;
+            const prompt = cardItem.querySelector('.card-prompt').value;
+            const content = cardItem.querySelector('.card-context').value;
+            fetchWithToast(`/api/cards/${encodeURIComponent(name)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt, content })
+            }, 'Card saved successfully', 'Failed to save card')
+                .then(() => {
+                    const exportIcon = cardItem.querySelector('.card-export');
+                    let cardData = { system_prompt: prompt };
+                    if (content) cardData.context = [{ role: "user", content }];
+                    const newCardData = { [name]: cardData };
+                    exportIcon.setAttribute('data-card-data', JSON.stringify(newCardData));
+                })
+                .catch(() => { });
+        }
+
+        // Prepare to delete card
+        if (e.target.closest('.card-delete')) {
+            e.stopPropagation();
+            const deleteBtn = e.target.closest('.card-delete');
+            const cardItem = deleteBtn.closest('.card-item');
+            const header = cardItem.querySelector('.card-header');
+            const confirmBtn = header.querySelector('.card-delete-confirm');
+            if (deleteBtn.dataset.timerId) clearTimeout(parseInt(deleteBtn.dataset.timerId));
+            deleteBtn.style.display = 'none';
+            confirmBtn.style.display = '';
+            confirmBtn.focus();
+            deleteBtn.dataset.timerId = '';
+        }
+
+        // Confirm delete card
+        if (e.target.closest('.card-delete-confirm')) {
+            e.stopPropagation();
+            const confirmBtn = e.target.closest('.card-delete-confirm');
+            const cardItem = confirmBtn.closest('.card-item');
+            const header = cardItem.querySelector('.card-header');
+            const deleteBtn = header.querySelector('.card-delete');
+            const name = header.querySelector('.card-name').textContent;
+            if (deleteBtn.dataset.timerId) {
+                clearTimeout(parseInt(deleteBtn.dataset.timerId));
+                deleteBtn.dataset.timerId = '';
+            }
+            fetchWithToast(`/api/cards/${encodeURIComponent(name)}`, {
+                method: 'DELETE'
+            }, '', 'Failed to delete card').then(() => {
+                cardItem.remove();
+            }).catch(() => { });
+        }
+
+        // Export card
+        if (e.target.closest('.card-export')) {
+            e.stopPropagation();
+            const exportIcon = e.target.closest('.card-export');
+            const cardItem = exportIcon.closest('.card-item');
+            const header = cardItem.querySelector('.card-header');
+            const name = header.querySelector('.card-name').textContent;
+            const cardDataStr = exportIcon.getAttribute('data-card-data');
+            if (cardDataStr) {
+                try {
+                    const cardData = JSON.parse(cardDataStr);
+                    const blob = new Blob([JSON.stringify(cardData, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${name}_${Date.now()}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                } catch (error) {
+                    console.error('Failed to export card:', error);
+                    toast.show(i18n.tr('Failed to export card'), 'error');
+                }
+            }
+        }
+    });
+
+    // Card delete confirmation, timeout on blur
+    document.addEventListener('focusout', (e) => {
+        if (e.target.closest('.card-delete-confirm')) {
+            const confirmBtn = e.target.closest('.card-delete-confirm');
+            const cardItem = confirmBtn.closest('.card-item');
+            const header = cardItem.querySelector('.card-header');
+            const deleteBtn = header.querySelector('.card-delete');
+            if (deleteBtn.dataset.timerId) clearTimeout(parseInt(deleteBtn.dataset.timerId));
+            const timerId = setTimeout(() => {
+                deleteBtn.style.display = '';
+                confirmBtn.style.display = 'none';
+                deleteBtn.dataset.timerId = '';
+            }, 500); // 500ms
+            deleteBtn.dataset.timerId = timerId.toString();
+        }
+    });
+
+    document.addEventListener('focusin', (e) => {
+        if (e.target.closest('.card-delete-confirm')) {
+            const confirmBtn = e.target.closest('.card-delete-confirm');
+            const cardItem = confirmBtn.closest('.card-item');
+            const header = cardItem.querySelector('.card-header');
+            const deleteBtn = header.querySelector('.card-delete');
+            if (deleteBtn.dataset.timerId) {
+                clearTimeout(parseInt(deleteBtn.dataset.timerId));
+                deleteBtn.dataset.timerId = '';
+            }
+        }
+    });
+
+    // Create card
+    const nameInput = document.getElementById('card-name-input');
+    const newCardButton = document.getElementById('new-card-button');
+    newCardButton.addEventListener('click', async () => {
+        const name = nameInput.value.trim() || generateCardName();
+        nameInput.value = '';
+        await fetchWithToast('/api/cards', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, cardPrompt: '', content: '' })
+        }, '', 'Failed to create card');
+        try {
+            const response = await fetch('/json/cards.json?t=' + Date.now());
+            const cards = await response.json();
+            renderCards(cards);
+        } catch (error) {
+            console.error('Failed to reload cards:', error);
+        }
+    });
+
+    // Import card
+    const importCardButton = document.getElementById('import-card-button');
+    const importFileInput = document.createElement('input');
+    importFileInput.type = 'file';
+    importFileInput.accept = '.json';
+    importFileInput.style.display = 'none';
+    document.body.appendChild(importFileInput);
+
+    importCardButton.addEventListener('click', () => {
+        importFileInput.click();
+    });
+
+    importFileInput.addEventListener('change', async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        try {
+            const text = await file.text();
+            const importedCards = JSON.parse(text);
+            if (!isValidStructure(importedCards)) throw new Error('Invalid card structure');
+            let successCount = 0;
+            let errorCount = 0;
+            for (const [cardName, cardData] of Object.entries(importedCards)) {
+                try {
+                    const prompt = cardData.system_prompt || '';
+                    const content = cardData.context?.[0]?.content || '';
+                    await fetchWithToast('/api/cards', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: cardName,
+                            prompt: prompt,
+                            content: content
+                        })
+                    }, '', 'Failed to import card');
+                    successCount++;
+                } catch (error) {
+                    errorCount++;
+                    console.error(`Failed to import card "${cardName}":`, error);
+                }
+            }
+            importFileInput.value = '';
+            try {
+                const response = await fetch('/json/cards.json?t=' + Date.now());
+                const cards = await response.json();
+                renderCards(cards);
+            } catch (error) {
+                console.error('Failed to reload cards:', error);
+            }
+        } catch (error) {
+            toast.show(`${i18n.tr("Failed to import card")}: ${i18n.tr(error.message)}`, 'error');
+            importFileInput.value = '';
+        }
+    });
+
+    // Card management functions
+    function renderCards(cards) {
+        const cardsList = document.getElementById('cards-list');
+        cardsList.innerHTML = '';
+
+        Object.entries(cards).forEach(([name, card]) => {
+            const cardElem = document.createElement('div');
+            cardElem.className = 'card-item';
+            cardElem.innerHTML = `
+<div class="card-header">
+    <span class="card-name">${escapeHtml(name)}</span>
+    <svg class="card-export"><use xlink:href="/img/icons.svg?v=120#icon-export"></use></svg>
+    <svg class="card-delete" tabindex="0"><use xlink:href="/img/icons.svg?v=120#icon-clear"></use></svg>
+    <svg class="card-delete-confirm" tabindex="0" style="display: none;"><use xlink:href="/img/icons.svg?v=120#icon-check"></use></svg>
+</div>
+<div class="card-content" style="display: none;">
+    <div class="form-group">
+        <label>${i18n.tr("Scenario & Personality")}</label>
+        <textarea class="card-prompt" rows="3">${escapeHtml(card.system_prompt || '')}</textarea>
+    </div>
+    <div class="form-group">
+        <label>${i18n.tr("Initial Messages")}</label>
+        <textarea class="card-context" rows="3">${escapeHtml(card.context?.[0]?.content || '')}</textarea>
+    </div>
+    <button class="card-save">${i18n.tr("Save Settings")}</button>
+</div>
+            `;
+            cardsList.appendChild(cardElem);
+
+            // Set export data for the card
+            const exportIcon = cardElem.querySelector('.card-export');
+            let cardData = { system_prompt: card.system_prompt || '' };
+            if (card.context) cardData.context = card.context;
+            exportIcon.setAttribute('data-card-data', JSON.stringify({ [name]: cardData }));
+        });
+    }
+
+    async function loadAndRenderCards() {
+        try {
+            const response = await fetch('/json/cards.json?t=' + Date.now());
+            const cards = await response.json();
+            renderCards(cards);
+        } catch (error) {
+            console.error('Failed to load cards:', error);
+        }
+    }
+</script>
+
+<script>
+    async function initQrCode() {
         try {
             const response = await fetch('/api/host/ip');
-            if (!response.ok) throw new Error('Network response was not ok');
             const data = await response.json();
-            return data.ip || '127.0.0.1';
-        } catch (error) {
-            return '127.0.0.1';
-        }
-    };
-
-    document.addEventListener('DOMContentLoaded', async function () {
-        try {
-            ip = await getHostIP();
-            const qrCode = new QRCode(document.getElementById('qr-code'), {
+            const ip = data.ip || '127.0.0.1';
+            new QRCode(document.getElementById('qr-code'), {
                 text: `http://${ip}:${location.port}/`,
                 width: 200,
                 height: 200,
@@ -358,19 +555,30 @@
                 correctLevel: QRCode.CorrectLevel.H
             });
             document.getElementById('qr-url').textContent = `http://${ip}:${location.port}/`;
-        } catch (error) { }
-    });
-</script>
+        } catch (error) {
+            console.error('Failed to init QR code:', error);
+        }
+    }
 
-<script>
-    // API documentation
-    const fetchMarkdown = async url => {
-        try { const r = await fetch(url); return r.ok ? await r.text() : "" }
-        catch { return "" }
-    };
+    async function initApiDocs() {
+        try {
+            const response = await fetch('/docs/api.md');
+            const markdown = await response.text();
+            document.getElementById('api-doc-content').innerHTML = marked.parse(markdown);
+        } catch (error) {
+            console.error('Failed to load API docs:', error);
+        }
+    }
 
-    document.addEventListener('DOMContentLoaded', async function () {
-        document.getElementById('api-doc-content').innerHTML = marked.parse(await fetchMarkdown('/docs/api.md'));
+    document.addEventListener('DOMContentLoaded', async () => {
+        await Promise.allSettled([
+            loadSettings(),
+            loadSerialDevices(),
+            loadLlmConfig(),
+            initQrCode(),
+            initApiDocs(),
+            loadAndRenderCards()
+        ]);
     });
 </script>
 
