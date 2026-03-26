@@ -198,7 +198,12 @@ select {
     cursor: pointer;
     transition: opacity 0.1s ease;
     fill: #555;
+    color: #555;
     z-index: 999;
+}
+
+.bubble:hover svg {
+    opacity: 1;
 }
 
 .edit-icon {
@@ -206,8 +211,9 @@ select {
     right: 5px;
 }
 
-.bubble:hover .edit-icon {
-    opacity: 1;
+.retry-icon {
+    bottom: 5px;
+    right: 5px;
 }
 
 .edit-textarea {

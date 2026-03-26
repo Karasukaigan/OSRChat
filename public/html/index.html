@@ -17,7 +17,7 @@
             <div class="prompt-info-header" id="prompt-info-toggle">
                 <span tr>System Prompt</span>
                 <svg class="toggle-icon">
-                    <use xlink:href="/img/icons.svg?v=120#icon-toggle"></use>
+                    <use xlink:href="/img/icons.svg?v=130#icon-toggle"></use>
                 </svg>
             </div>
             <div class="prompt-info-content" id="prompt-info-content">
@@ -37,28 +37,28 @@
             </select>
             <button id="clear-button" class="stop" title="Clear Context" tr-title>
                 <svg>
-                    <use xlink:href="/img/icons.svg?v=120#icon-clear"></use>
+                    <use xlink:href="/img/icons.svg?v=130#icon-clear"></use>
                 </svg>
             </button>
             <button id="undo-button" class="stop" title="Undo Last Message" tr-title>
                 <svg>
-                    <use xlink:href="/img/icons.svg?v=120#icon-undo"></use>
+                    <use xlink:href="/img/icons.svg?v=130#icon-undo"></use>
                 </svg>
             </button>
             <button id="export-button" title="Export Context" tr-title>
                 <svg>
-                    <use xlink:href="/img/icons.svg?v=120#icon-export"></use>
+                    <use xlink:href="/img/icons.svg?v=130#icon-export"></use>
                 </svg>
             </button>
             <button id="import-button" title="Import Context" tr-title>
                 <svg>
-                    <use xlink:href="/img/icons.svg?v=120#icon-import"></use>
+                    <use xlink:href="/img/icons.svg?v=130#icon-import"></use>
                 </svg>
             </button>
             <input type="file" id="import-file-input" accept=".json" style="display: none;" />
             <button id="settings-button" title="Settings" tr-title>
                 <svg>
-                    <use xlink:href="/img/icons.svg?v=120#icon-settings"></use>
+                    <use xlink:href="/img/icons.svg?v=130#icon-settings"></use>
                 </svg>
             </button>
             <div id="llm-status" class="llm-status"></div>
@@ -71,12 +71,12 @@
                 <div class="button-group">
                     <button id="send-button">
                         <svg>
-                            <use xlink:href="/img/icons.svg?v=120#icon-send"></use>
+                            <use xlink:href="/img/icons.svg?v=130#icon-send"></use>
                         </svg>
                     </button>
                     <button id="stop-button" class="stop">
                         <svg>
-                            <use xlink:href="/img/icons.svg?v=120#icon-stop"></use>
+                            <use xlink:href="/img/icons.svg?v=130#icon-stop"></use>
                         </svg>
                     </button>
                 </div>
@@ -93,7 +93,6 @@
             const res = await fetch('/api/llm/test?t=' + Date.now(), { method: 'GET' });
             const data = await res.json();
             if (data.success) {
-                console.log(data);
                 statusDiv.textContent = i18n.tr('Connected');
                 statusDiv.className = 'llm-status connected';
             } else {
@@ -154,20 +153,23 @@
     // Update system prompt
     const updateSystemPrompt = async () => {
         if (!chatStarted) clearContext();
-        systemPrompt = `## ${i18n.tr("System Role Settings")}\n\n`;
-        const roleKey = roleSelect.value;
-        const cardKey = cardSelect.value;
-        const modeKey = modeSelect.value;
-        if (roleKey && Object.hasOwn(systemRoles, roleKey) && systemRoles[roleKey]) systemPrompt += String(systemRoles[roleKey]);
+        systemPrompt = '';
+        const roleKey = roleSelect.value.trim();
+        const modeKey = modeSelect.value.trim();
+        const cardKey = cardSelect.value.trim();
+        if (roleKey || modeKey) systemPrompt += `## ${i18n.tr("System Role Settings")}`;
+        if (roleKey && Object.hasOwn(systemRoles, roleKey) && systemRoles[roleKey]) systemPrompt += '\n\n' + String(systemRoles[roleKey]);
         if (modeKey && Object.hasOwn(controlModes, modeKey) && controlModes[modeKey]) systemPrompt += '\n\n' + String(controlModes[modeKey]);
         if (cardKey && Object.hasOwn(cards, cardKey)) {
             systemPrompt += `\n\n## ${i18n.tr("Scenario and Personality Settings")}\n\n`;
             if (cards[cardKey] && Object.hasOwn(cards[cardKey], 'system_prompt') && cards[cardKey]['system_prompt']) systemPrompt += String(cards[cardKey]['system_prompt']);
             if (!chatStarted && cards[cardKey] && Object.hasOwn(cards[cardKey], 'context')) {
-                chatContext = [...cards[cardKey]['context']];
+                const contextData = cards[cardKey]['context'];
+                chatContext = Array.isArray(contextData) ? [...contextData] : [];
                 await renderChatContext(chatContext);
             }
         }
+        systemPrompt = systemPrompt.trim();
         systemPromptInfoText.textContent = systemPrompt;
     }
 
@@ -349,32 +351,45 @@
     let isDeviceMoving = false; // Whether device is moving
 
     // Send message
-    async function sendMessage() {
+    async function sendMessage(content = null, isRetry = false) {
         if (abortController) return;
-        const content = messageInput.value.trim();
-        if (!content) return;
+        const messageContent = (content !== null && typeof content === 'string') ? content : messageInput.value.trim();
+        if (!messageContent) return;
         chatStarted = true;
 
         abortController = new AbortController();
 
         // Display user message
-        const userBubble = document.createElement('div');
-        userBubble.className = 'bubble user';
-        userBubble.textContent = content;
-        chatBubbles.appendChild(userBubble);
-        messageInput.value = '';
+        if (!isRetry) {
+            const userBubble = document.createElement('div');
+            userBubble.className = 'bubble user';
+            userBubble.textContent = messageContent;
+            chatBubbles.appendChild(userBubble);
+            messageInput.value = '';
+        }
 
         try {
+            // Check if already aborted before fetch
+            if (abortController.signal.aborted) {
+                abortController = null;
+                return;
+            }
+            
             const response = await fetch('/api/llm/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    user_message: content,
-                    context_messages: chatContext,
-                    system_prompt: systemPrompt
+                    user_message: messageContent,
+                    context_messages: chatContext || [],
+                    system_prompt: systemPrompt || ""
                 }),
                 signal: abortController.signal,
             });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
@@ -455,12 +470,20 @@
             addEditIcon(assistantBubble);
 
             // Add this conversation to context
-            chatContext.push(
-                { role: "user", content: content },
-                { role: "assistant", content: markdownContent }
-            );
+            if (isRetry) {
+                chatContext.push({ role: "assistant", content: markdownContent });
+            } else {
+                chatContext.push(
+                    { role: "user", content: messageContent },
+                    { role: "assistant", content: markdownContent }
+                );
+            }
         } catch (error) {
-            console.error('Failed to send message:', error);
+            if (error.name === 'AbortError') {
+                console.info('Conversation aborted by user');
+            } else {
+                console.error('Failed to send message:', error);
+            }
         } finally {
             abortController = null;
         }
@@ -582,13 +605,37 @@
     const addEditIcon = (bubble) => {
         const editIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         editIcon.setAttribute('class', 'edit-icon');
-        editIcon.setAttribute('width', '16');
-        editIcon.setAttribute('height', '16');
-        editIcon.setAttribute('viewBox', '0 0 24 24');
         const useElem = document.createElementNS('http://www.w3.org/2000/svg', 'use');
-        useElem.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', '/img/icons.svg?v=120#icon-edit');
+        useElem.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', '/img/icons.svg?v=130#icon-edit');
         editIcon.appendChild(useElem);
         bubble.appendChild(editIcon);
+
+        const assistantBubbles = chatBubbles.querySelectorAll('.bubble.assistant');
+        const isLastAssistant = assistantBubbles.length > 0 && assistantBubbles[assistantBubbles.length - 1] === bubble;
+        if (isLastAssistant) {
+            document.querySelectorAll('.retry-icon').forEach(icon => icon.remove());
+            const retryIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            retryIcon.setAttribute('class', 'retry-icon');
+            const useRetry = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+            useRetry.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', '/img/icons.svg?v=130#icon-refresh');
+            retryIcon.appendChild(useRetry);
+            retryIcon.addEventListener('click', (e) => {
+                e.stopPropagation();
+                retryAssistant(bubble);
+            });
+            bubble.insertBefore(retryIcon, editIcon);
+        }
+    };
+
+    const retryAssistant = (bubble) => {
+        const bubbleIndex = Array.from(chatBubbles.children).indexOf(bubble);
+        if (bubbleIndex < 1) return;
+        if (!bubble.classList.contains('assistant')) return;
+
+        const userMessage = chatContext[bubbleIndex - 1].content;
+        chatContext.splice(bubbleIndex, 1);
+        bubble.remove();
+        sendMessage(userMessage, true);
     };
 
     async function sendCustom(scriptDict) {
@@ -630,7 +677,7 @@
     }
 
     // Send button click event
-    sendButton.addEventListener('click', sendMessage);
+    sendButton.addEventListener('click', () => sendMessage());
     messageInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             if (e.altKey || e.ctrlKey) {
@@ -668,7 +715,20 @@
             if (bubbles.length >= 2) {
                 chatBubbles.removeChild(bubbles[bubbles.length - 1]);
                 chatBubbles.removeChild(bubbles[bubbles.length - 2]);
+                // Remove corresponding entries from chatContext
+                if (chatContext.length >= 2) {
+                    chatContext.splice(-2);
+                } else if (chatContext.length === 1) {
+                    chatContext.pop();
+                }
+            } else if (bubbles.length === 1) {
+                chatBubbles.removeChild(bubbles[0]);
+                if (chatContext.length >= 1) {
+                    chatContext.pop();
+                }
             }
+            // Update chatStarted flag
+            chatStarted = chatContext.length > 0;
         }
     });
 

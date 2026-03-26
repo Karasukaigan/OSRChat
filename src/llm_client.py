@@ -1,5 +1,6 @@
 # ./src/llm_client.py
 import openai
+import threading
 from typing import List, Dict, Optional, Generator
 
 class LLMClient:
@@ -81,6 +82,7 @@ class LLMClient:
         temperature: float = 1,
         num_predict: int = 8000,
         think: bool = True,
+        stop_event: Optional[threading.Event] = None,
     ) -> Generator[str, None, None]:
         """
         Chat conversation
@@ -137,6 +139,14 @@ class LLMClient:
             think_tag = True
 
             for chunk in stream:
+                if stop_event and stop_event.is_set():
+                    # Try to close the stream to immediately release LLM connection
+                    if hasattr(stream, 'close'):
+                        try:
+                            stream.close()
+                        except:
+                            pass
+                    break
                 if chunk.choices and len(chunk.choices) > 0:
                     delta = chunk.choices[0].delta
                     reasoning = getattr(delta, 'reasoning', None)

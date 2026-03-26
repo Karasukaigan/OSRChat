@@ -20,9 +20,9 @@ from src.player import Player
 from src.joystick import JoystickController
 from src.llm_client import LLMClient
 
-version_info = "OSRChat v1.2.0"
+version_info = "OSRChat v1.3.0"
 PORT = 12333
-app = FastAPI(title="OSRChat", version="1.2.0")
+app = FastAPI(title="OSRChat", version="1.3.0")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 public_dir = os.path.join(BASE_DIR, "public")
@@ -344,7 +344,8 @@ async def chat_with_llm(
                     system_prompt=system_prompt,
                     context_messages=context_messages,
                     temperature=temperature,
-                    num_predict=num_predict
+                    num_predict=num_predict,
+                    stop_event=stop_event
                 )
                 for token in gen:
                     if stop_event.is_set():
