@@ -191,6 +191,7 @@ select {
 
 .thinking {
     max-height: 100px;
+    flex-shrink: 0;
     font-size: 50%;
     color: #555;
     overflow-y: auto;

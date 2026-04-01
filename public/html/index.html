@@ -449,7 +449,6 @@
                                     assistantBubble.innerHTML = marked.parse(markdownContent);
                                 }
                                 chatBubbles.scrollTop = chatBubbles.scrollHeight;
-                                assistantBubble.offsetHeight;
                                 assistantBubble.scrollTop = assistantBubble.scrollHeight;
                             }
                         } catch (e) {
@@ -487,6 +486,7 @@
             }
 
             assistantBubble.classList.remove('thinking');
+            chatBubbles.scrollTop = chatBubbles.scrollHeight;
 
             try {
                 if (markdownContent.includes("STOP_TOY")) await fetch('/api/script/stop', { method: 'GET' });
@@ -822,6 +822,7 @@
     messageInput.addEventListener('focus', () => {
         if (messageInput.value.trim() !== '') {
             messageInput.style.height = '200px';
+            chatBubbles.scrollTop = chatBubbles.scrollHeight;
         }
     });
     messageInput.addEventListener('blur', () => {
@@ -830,6 +831,7 @@
     messageInput.addEventListener('input', () => {
         if (document.activeElement === messageInput && messageInput.value.trim() !== '') {
             messageInput.style.height = '200px';
+            chatBubbles.scrollTop = chatBubbles.scrollHeight;
         } else if (document.activeElement !== messageInput) {
             messageInput.style.height = originalHeight;
         }
