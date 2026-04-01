@@ -8,3 +8,4 @@ requests
 openai
 Pillow
 pystray
+aiohttp

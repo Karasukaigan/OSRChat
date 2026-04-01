@@ -17,6 +17,7 @@
     <div class="tabs">
         <button class="tab-button active" data-tab="default">OSR</button>
         <button class="tab-button" data-tab="llm">LLM</button>
+        <button class="tab-button" data-tab="comfyui">T2I</button>
         <button class="tab-button" data-tab="cards">CARDS</button>
         <button class="tab-button" data-tab="qr">QR</button>
         <button class="tab-button" data-tab="api">API</button>
@@ -41,7 +42,7 @@
 
                 <div class="form-group">
                     <label for="udpUrl" tr>UDP Address</label>
-                    <input type="text" id="udpUrl" name="udpUrl" placeholder="192.168.4.1:8000">
+                    <input type="text" id="udpUrl" name="udpUrl" placeholder="http://192.168.4.1:8000">
                 </div>
 
                 <div class="form-group">
@@ -76,12 +77,51 @@
                 </div>
                 <div class="form-group">
                     <label for="model" tr>Model</label>
-                    <input type="text" id="model" name="model" placeholder="qwen3:30b">
+                    <input type="text" id="model" name="model" placeholder="glm-4.7-flash">
                 </div>
                 <button type="submit" tr>Save Settings</button>
             </form>
         </div>
         <a href="/" style="display: block; text-align: center;" tr>Go to Chat ></a>
+    </div>
+
+    <div class="tab-content" id="comfyui-tab">
+        <div class="container" style="margin-bottom: 10px;">
+            <form id="comfyuiConfigForm">
+                <div class="form-group">
+                    <label for="comfyUrl" tr>ComfyUI URL</label>
+                    <input type="text" id="comfyUrl" name="url" placeholder="http://127.0.0.1:8188">
+                </div>
+                <div class="form-group">
+                    <label tr>Model Type</label>
+                    <div class="radio-group">
+                        <div class="radio-option">
+                            <input type="radio" id="comfyTypeSdxl" name="comfyType" value="sdxl">
+                            <label for="comfyTypeSdxl">SDXL / Illustrious</label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="comfyTypeZit" name="comfyType" value="zit">
+                            <label for="comfyTypeZit">ZIT</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="comfyDiffusion" tr>Diffusion Model</label>
+                    <input type="text" id="comfyDiffusion" name="diffusion"
+                        placeholder="z_image_turbo_bf16.safetensors">
+                </div>
+                <div class="form-group clip-vae-group">
+                    <label for="comfyClip" tr>CLIP Model</label>
+                    <input type="text" id="comfyClip" name="clip" placeholder="qwen_3_4b.safetensors">
+                </div>
+                <div class="form-group clip-vae-group">
+                    <label for="comfyVae" tr>VAE Model</label>
+                    <input type="text" id="comfyVae" name="vae" placeholder="ae.safetensors">
+                </div>
+                <button type="submit" tr>Save Settings</button>
+            </form>
+        </div>
+        <a href="#" id="clear-t2i-cache" style="display: block; text-align: center;" tr>Clear Image Cache</a>
     </div>
 
     <div class="tab-content" id="cards-tab" style="width: 100%;">
@@ -90,12 +130,12 @@
                 <input type="text" id="card-name-input" placeholder="" style="flex: 1;">
                 <button id="new-card-button" style="width: auto;">
                     <svg>
-                        <use xlink:href="/img/icons.svg?v=130#icon-add"></use>
+                        <use xlink:href="/img/icons.svg?v=140#icon-add"></use>
                     </svg>
                 </button>
                 <button id="import-card-button" style="width: auto;">
                     <svg>
-                        <use xlink:href="/img/icons.svg?v=130#icon-import"></use>
+                        <use xlink:href="/img/icons.svg?v=140#icon-import"></use>
                     </svg>
                 </button>
             </div>
@@ -240,6 +280,25 @@
         }
     }
 
+    async function loadComfyUiConfig() {
+        try {
+            const response = await fetch('/api/config/comfyui?t=' + Date.now());
+            const config = await response.json();
+            if (config.url) document.getElementById('comfyUrl').value = config.url;
+            const typeValue = (config.type || '').toLowerCase();
+            if (typeValue === 'sdxl') {
+                document.getElementById('comfyTypeSdxl').checked = true;
+            } else if (typeValue === 'zit') {
+                document.getElementById('comfyTypeZit').checked = true;
+            }
+            if (config.diffusion) document.getElementById('comfyDiffusion').value = config.diffusion;
+            if (config.clip) document.getElementById('comfyClip').value = config.clip;
+            if (config.vae) document.getElementById('comfyVae').value = config.vae;
+        } catch (error) {
+            console.error('Failed to load ComfyUI config:', error);
+        }
+    }
+
     // Joystick control
     document.getElementById('joystickControl').addEventListener('change', async function () {
         try {
@@ -273,6 +332,14 @@
         } catch (error) { }
     });
 
+    // Clear T2I cache
+    document.getElementById('clear-t2i-cache')?.addEventListener('click', async function (e) {
+        e.preventDefault();
+        await fetchWithToast('/api/t2i/cache', {
+            method: 'DELETE'
+        }, 'Image cache cleared successfully', 'Failed to clear cache');
+    });
+
     // Update LLM settings
     document.getElementById('llmConfigForm').addEventListener('submit', async function (e) {
         e.preventDefault();
@@ -289,6 +356,33 @@
             body: JSON.stringify(requestBody)
         }, 'Settings saved successfully', 'Failed to save settings');
     });
+
+    // Update ComfyUI settings
+    document.getElementById('comfyuiConfigForm')?.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const url = document.getElementById('comfyUrl').value.trim();
+        const diffusion = document.getElementById('comfyDiffusion').value.trim();
+        const clip = document.getElementById('comfyClip').value.trim();
+        const vae = document.getElementById('comfyVae').value.trim();
+        const type = document.querySelector('input[name="comfyType"]:checked')?.value || '';
+        const requestBody = { url, type, diffusion, clip, vae };
+        await fetchWithToast('/api/config/comfyui', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+        }, 'Settings saved successfully', 'Failed to save ComfyUI settings');
+    });
+
+    function toggleClipVaeFields() {
+        const isSdxl = document.getElementById('comfyTypeSdxl').checked;
+        const clipVaeGroups = document.querySelectorAll('.clip-vae-group');
+        clipVaeGroups.forEach(group => {
+            group.style.display = isSdxl ? 'none' : 'flex';
+        });
+    }
+
+    document.getElementById('comfyTypeSdxl').addEventListener('change', toggleClipVaeFields);
+    document.getElementById('comfyTypeZit').addEventListener('change', toggleClipVaeFields);
 </script>
 
 <script>
@@ -430,7 +524,7 @@
             body: JSON.stringify({ name, cardPrompt: '', content: '' })
         }, '', 'Failed to create card');
         try {
-            const response = await fetch('/json/cards.json?t=' + Date.now());
+            const response = await fetch('/json/prompts/cards.json?t=' + Date.now());
             const cards = await response.json();
             renderCards(cards);
         } catch (error) {
@@ -480,7 +574,7 @@
             }
             importFileInput.value = '';
             try {
-                const response = await fetch('/json/cards.json?t=' + Date.now());
+                const response = await fetch('/json/prompts/cards.json?t=' + Date.now());
                 const cards = await response.json();
                 renderCards(cards);
             } catch (error) {
@@ -503,9 +597,9 @@
             cardElem.innerHTML = `
 <div class="card-header">
     <span class="card-name">${escapeHtml(name)}</span>
-    <svg class="card-export"><use xlink:href="/img/icons.svg?v=130#icon-export"></use></svg>
-    <svg class="card-delete" tabindex="0"><use xlink:href="/img/icons.svg?v=130#icon-clear"></use></svg>
-    <svg class="card-delete-confirm" tabindex="0" style="display: none;"><use xlink:href="/img/icons.svg?v=130#icon-check"></use></svg>
+    <svg class="card-export"><use xlink:href="/img/icons.svg?v=140#icon-export"></use></svg>
+    <svg class="card-delete" tabindex="0"><use xlink:href="/img/icons.svg?v=140#icon-clear"></use></svg>
+    <svg class="card-delete-confirm" tabindex="0" style="display: none;"><use xlink:href="/img/icons.svg?v=140#icon-check"></use></svg>
 </div>
 <div class="card-content" style="display: none;">
     <div class="form-group">
@@ -519,7 +613,7 @@
     <button class="card-save">${i18n.tr("Save Settings")}</button>
 </div>
             `;
-            cardsList.appendChild(cardElem);
+            cardsList.prepend(cardElem);
 
             // Set export data for the card
             const exportIcon = cardElem.querySelector('.card-export');
@@ -531,7 +625,7 @@
 
     async function loadAndRenderCards() {
         try {
-            const response = await fetch('/json/cards.json?t=' + Date.now());
+            const response = await fetch('/json/prompts/cards.json?t=' + Date.now());
             const cards = await response.json();
             renderCards(cards);
         } catch (error) {
@@ -575,10 +669,13 @@
             loadSettings(),
             loadSerialDevices(),
             loadLlmConfig(),
+            loadComfyUiConfig(),
             initQrCode(),
             initApiDocs(),
             loadAndRenderCards()
         ]);
+
+        toggleClipVaeFields();
     });
 </script>
 

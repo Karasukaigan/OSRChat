@@ -216,6 +216,18 @@ select {
     right: 5px;
 }
 
+.t2i-button {
+    bottom: 5px;
+    right: 28px;
+}
+
+.t2i-image-container img {
+    width: 100%;
+    max-width: 400px;
+    border-radius: 10px;
+    margin-bottom: 10px;
+}
+
 .edit-textarea {
     max-width: 100%;
     width: 1000px;

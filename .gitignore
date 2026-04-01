@@ -5,6 +5,7 @@ __pycache__
 /build
 /dist
 /output
+/public/img/comfyui
 main.spec
 setup.iss
 .env

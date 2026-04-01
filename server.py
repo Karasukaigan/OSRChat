@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 import json
 import uvicorn
 import os
+import shutil
 from queue import Queue, Empty
 import serial
 import serial.tools.list_ports
@@ -19,10 +20,11 @@ load_dotenv()
 from src.player import Player
 from src.joystick import JoystickController
 from src.llm_client import LLMClient
+from src.comfyui import ComfyUIClient
 
-version_info = "OSRChat v1.3.0"
+version_info = "OSRChat v1.4.0"
 PORT = 12333
-app = FastAPI(title="OSRChat", version="1.3.0")
+app = FastAPI(title="OSRChat", version="1.4.0")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 public_dir = os.path.join(BASE_DIR, "public")
@@ -44,6 +46,14 @@ llm_client = LLMClient(
     base_url = os.getenv("BASE_URL", ""),
     api_key = os.getenv("API_KEY", ""),
     model = os.getenv("MODEL", "")
+)
+
+comfyui_client = ComfyUIClient(
+    os.getenv("COMFYUI_URL", ""),
+    os.getenv("COMFYUI_TYPE", ""),
+    os.getenv("COMFYUI_diffusion", ""),
+    os.getenv("COMFYUI_CLIP", ""),
+    os.getenv("COMFYUI_VAE", ""),
 )
 
 @app.get("/")
@@ -159,8 +169,56 @@ async def get_llm_config():
         "model": llm_client.model
     }
 
+@app.post("/api/config/comfyui")
+async def set_comfyui_config(
+    url: str = Body(""),
+    type_: str = Body("", alias="type"),
+    diffusion: str = Body(""),
+    clip: str = Body(""),
+    vae: str = Body("")
+):
+    """Configure ComfyUI client"""
+    global comfyui_client
+    if url != os.getenv("COMFYUI_URL"):
+        set_key(".env", "COMFYUI_URL", url)
+    if type_ != os.getenv("COMFYUI_TYPE"):
+        set_key(".env", "COMFYUI_TYPE", type_)
+    if diffusion != os.getenv("COMFYUI_diffusion"):
+        set_key(".env", "COMFYUI_diffusion", diffusion)
+    if clip != os.getenv("COMFYUI_CLIP"):
+        set_key(".env", "COMFYUI_CLIP", clip)
+    if vae != os.getenv("COMFYUI_VAE"):
+        set_key(".env", "COMFYUI_VAE", vae)
+    load_dotenv(override=True)
+    comfyui_client = ComfyUIClient(
+        os.getenv("COMFYUI_URL", ""),
+        os.getenv("COMFYUI_TYPE", ""),
+        os.getenv("COMFYUI_diffusion", ""),
+        os.getenv("COMFYUI_CLIP", ""),
+        os.getenv("COMFYUI_VAE", ""),
+    )
+    return {
+        "message": "ComfyUI configuration updated successfully",
+        "url": comfyui_client.base_url,
+        "type": comfyui_client.type,
+        "diffusion": comfyui_client.diffusion,
+        "clip": comfyui_client.clip,
+        "vae": comfyui_client.vae,
+    }
+
+@app.get("/api/config/comfyui")
+async def get_comfyui_config():
+    """Get current ComfyUI configuration"""
+    return {
+        "url": os.getenv("COMFYUI_URL", ""),
+        "type": os.getenv("COMFYUI_TYPE", ""),
+        "diffusion": os.getenv("COMFYUI_diffusion", ""),
+        "clip": os.getenv("COMFYUI_CLIP", ""),
+        "vae": os.getenv("COMFYUI_VAE", ""),
+    }
+
 def load_cards():
-    cards_path = os.path.join(public_dir, "json", "cards.json")
+    cards_path = os.path.join(public_dir, "json", "prompts", "cards.json")
     if os.path.exists(cards_path):
         with open(cards_path, 'r', encoding='utf-8') as f:
             return json.load(f)
@@ -171,7 +229,7 @@ def load_cards():
     return {}
 
 def save_cards(cards):
-    cards_path = os.path.join(public_dir, "json", "cards.json")
+    cards_path = os.path.join(public_dir, "json", "prompts", "cards.json")
     with open(cards_path, 'w', encoding='utf-8') as f:
         json.dump(cards, f, ensure_ascii=False, indent=2)
 
@@ -382,6 +440,39 @@ async def chat_with_llm(
 
     return StreamingResponse(generate_stream(), media_type="text/event-stream")
 
+@app.post("/api/t2i")
+async def text_to_image(prompt: str = Body(..., embed=True)):
+    """Generate image from text prompt using ComfyUI"""
+    if not prompt.strip():
+        raise HTTPException(status_code=400, detail="Prompt cannot be empty")
+    image_path = await comfyui_client.run_t2i(prompt=prompt.strip())
+    if not image_path:
+        raise HTTPException(status_code=500, detail="Failed to generate image via ComfyUI")
+    return {"image_url": image_path}
+
+@app.delete("/api/t2i/cache")
+async def clear_t2i_cache():
+    """Delete all files in the ComfyUI image output directory"""
+    comfyui_img_dir = os.path.join(public_dir, "img", "comfyui")
+    if not os.path.exists(comfyui_img_dir):
+        return {"message": "Cache directory does not exist", "deleted_count": 0}
+    deleted_count = 0
+    for filename in os.listdir(comfyui_img_dir):
+        file_path = os.path.join(comfyui_img_dir, filename)
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+                deleted_count += 1
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+                deleted_count += 1
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to delete {file_path}: {str(e)}")
+    return {
+        "message": "ComfyUI image cache cleared successfully",
+        "deleted_count": deleted_count
+    }
+
 def create_image():
     """Create tray icon from public/img/logo.png"""
     logo_path = os.path.join(public_dir, "img", "logo.png")
@@ -427,7 +518,7 @@ def run_tray_icon():
         webbrowser.open(f"http://127.0.0.1:{PORT}/settings")
 
     def open_prompts(icon, item):
-        os.startfile(os.path.join(os.path.dirname(os.path.abspath(__file__)), "public", "json"))
+        os.startfile(os.path.join(os.path.dirname(os.path.abspath(__file__)), "public", "json", "prompts"))
 
     def open_github(icon, item):
         webbrowser.open("https://github.com/Karasukaigan/OSRChat")

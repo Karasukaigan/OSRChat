@@ -30,5 +30,13 @@
   "Operation failed": "操作失败",
   "Failed to export card": "导出卡片失败",
   "Failed to import card": "导入卡片失败",
-  "Invalid card structure": "无效的卡片结构"
+  "Invalid card structure": "无效的卡片结构",
+  "ComfyUI URL": "ComfyUI地址",
+  "Model Type": "模型类别",
+  "Diffusion Model": "扩散模型",
+  "CLIP Model": "CLIP模型",
+  "VAE Model": "VAE模型",
+  "Clear Image Cache": "清除图像缓存",
+  "Image cache cleared successfully": "图像缓存清除成功",
+  "Failed to clear cache": "清除缓存失败"
 }

@@ -138,6 +138,12 @@ svg {
     scrollbar-width: none;
 }
 
+@media (max-width: 500px) {
+    .container {
+        max-height: calc(100vh - 230px);
+    }
+}
+
 .container::-webkit-scrollbar {
     display: none;
 }
@@ -253,7 +259,6 @@ label {
 .card-item {
     border: 1px solid #ddd;
     border-radius: 8px;
-    overflow: hidden;
 }
 
 .card-item svg:hover {
@@ -283,6 +288,8 @@ label {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    height: calc(100% - 52px);
+    overflow-y: auto;
 }
 
 .card-content {
