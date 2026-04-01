@@ -424,6 +424,7 @@
 
             let buffer = '';
             let markdownContent = '';
+            assistantBubble.classList.add('thinking');
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
@@ -449,6 +450,7 @@
                                 }
                                 chatBubbles.scrollTop = chatBubbles.scrollHeight;
                                 assistantBubble.offsetHeight;
+                                assistantBubble.scrollTop = assistantBubble.scrollHeight;
                             }
                         } catch (e) {
                             console.warn('Failed to parse SSE data:', line);
@@ -483,6 +485,8 @@
                     assistantBubble.appendChild(button);
                 }
             }
+
+            assistantBubble.classList.remove('thinking');
 
             try {
                 if (markdownContent.includes("STOP_TOY")) await fetch('/api/script/stop', { method: 'GET' });

@@ -190,6 +190,19 @@ select {
     position: relative;
 }
 
+.thinking {
+    max-height: 100px;
+    font-size: 50%;
+    color: #ccc;
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.thinking::-webkit-scrollbar {
+  display: none;
+}
+
 .bubble svg { 
     position: absolute;
     width: 16px;

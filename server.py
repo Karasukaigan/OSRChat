@@ -22,9 +22,9 @@ from src.joystick import JoystickController
 from src.llm_client import LLMClient
 from src.comfyui import ComfyUIClient
 
-version_info = "OSRChat v1.4.0"
+version_info = "OSRChat v1.4.1"
 PORT = 12333
-app = FastAPI(title="OSRChat", version="1.4.0")
+app = FastAPI(title="OSRChat", version="1.4.1")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 public_dir = os.path.join(BASE_DIR, "public")
