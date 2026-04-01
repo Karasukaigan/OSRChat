@@ -5,7 +5,6 @@
 OSRChat makes your OSR device smarter. It can connect to any LLM as long as it follows the OpenAI API specification. You can also connect to Ollama for local deployment, ensuring 100% privacy. Additionally, you can customize prompts to build your own conversational scenarios, similar to SillyTavern.
 
 ![screenshot_1](./public/img/screenshot_1.png "screenshot_1")
-![screenshot_4](./public/img/screenshot_4.png "screenshot_4")
 
 ## Installation
 
