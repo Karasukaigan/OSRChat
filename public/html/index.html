@@ -153,6 +153,7 @@
         if (abortController) return;
         chatContext = [];
         chatBubbles.innerHTML = '';
+        refreshBubbleIndices();
     };
 
     // Update system prompt
@@ -172,8 +173,9 @@
                 await renderChatContext(chatContext);
             }
         }
-        if (roleKey || modeKey) systemPrompt += `## ${i18n.tr("System Role Settings")}`;
+        if (roleKey || t2iKey || modeKey) systemPrompt += `## ${i18n.tr("System Role Settings")}`;
         if (roleKey && Object.hasOwn(systemRoles, roleKey) && systemRoles[roleKey]) systemPrompt += '\n\n' + String(systemRoles[roleKey]);
+        if (t2iKey || modeKey) systemPrompt += `\n\n### ${i18n.tr("Additional Tasks Required")}`;
         if (t2iKey && Object.hasOwn(t2iPrompts, t2iKey) && t2iPrompts[t2iKey]) systemPrompt += '\n\n' + String(t2iPrompts[t2iKey]);
         if (modeKey && Object.hasOwn(controlModes, modeKey) && controlModes[modeKey]) systemPrompt += '\n\n' + String(controlModes[modeKey]);
         systemPrompt = systemPrompt.trim();
@@ -277,6 +279,14 @@
         chatBubbles.scrollTop = chatBubbles.scrollHeight;
     };
 
+    // Refresh data-context-index for all bubbles to match chatContext indices
+    const refreshBubbleIndices = () => {
+        const bubbles = chatBubbles.querySelectorAll('.bubble');
+        bubbles.forEach((bubble, index) => {
+            bubble.dataset.contextIndex = index;
+        });
+    };
+
     // Settings
     document.getElementById('settings-button').addEventListener('click', () => {
         window.location.href = '/settings';
@@ -298,6 +308,7 @@
             chatBubbles.removeChild(bubbles[bubbles.length - 2]);
             chatContext.splice(-2);
             if (chatContext.length <= 1) chatStarted = false;
+            refreshBubbleIndices();
         }
     });
 
@@ -381,6 +392,7 @@
         const messageContent = (content !== null && typeof content === 'string') ? content : messageInput.value.trim();
         if (!messageContent) return;
         chatStarted = true;
+        document.body.focus();
 
         abortController = new AbortController();
 
@@ -389,8 +401,10 @@
             const userBubble = document.createElement('div');
             userBubble.className = 'bubble user';
             userBubble.textContent = messageContent;
+            userBubble.dataset.contextIndex = chatContext.length;
             chatBubbles.appendChild(userBubble);
             messageInput.value = '';
+            chatContext.push({ role: "user", content: messageContent });
         }
 
         try {
@@ -440,6 +454,7 @@
                                 if (data.token.includes("__THINKING_FINISHED__")) {
                                     assistantBubble.innerHTML = '';
                                     markdownContent = '';
+                                    assistantBubble.classList.remove('thinking');
                                     const afterThinking = data.token.split("__THINKING_FINISHED__")[1];
                                     if (afterThinking) {
                                         assistantBubble.innerHTML += marked.parse(afterThinking);
@@ -497,17 +512,7 @@
             }
 
             addEditIcon(assistantBubble);
-
-            // Add this conversation to context
-            if (isRetry) {
-                chatContext.push({ role: "assistant", content: markdownContent });
-            } else {
-                chatContext.push(
-                    { role: "user", content: messageContent },
-                    { role: "assistant", content: markdownContent }
-                );
-            }
-
+            chatContext.push({ role: "assistant", content: markdownContent });
             const assistantIndex = chatContext.length - 1;
             assistantBubble.dataset.contextIndex = assistantIndex;
             addT2IButtonIfNeeded(assistantBubble, markdownContent, assistantIndex);
@@ -729,18 +734,8 @@
         }
     };
 
-    const retryAssistant = (bubble) => {
-        const bubbleIndex = Array.from(chatBubbles.children).indexOf(bubble);
-        if (bubbleIndex < 1) return;
-        if (!bubble.classList.contains('assistant')) return;
-
-        const userMessage = chatContext[bubbleIndex - 1].content;
-        chatContext.splice(bubbleIndex, 1);
-        bubble.remove();
-        sendMessage(userMessage, true);
-    };
-
     const retryAssistantFromBubble = (bubble) => {
+        if (abortController) return;
         const bubbleIndex = Array.from(chatBubbles.children).indexOf(bubble);
         if (bubbleIndex < 1 || !bubble.classList.contains('assistant')) return;
 
@@ -810,9 +805,11 @@
                 e.target.value = value.slice(0, start) + '\n' + value.slice(end);
                 e.target.setSelectionRange(start + 1, start + 1);
                 e.preventDefault();
+                messageInput.scrollTop = messageInput.scrollHeight;
             } else {
                 // Enter to send message
                 e.preventDefault();
+                messageInput.blur();
                 sendMessage();
             }
         }
@@ -821,7 +818,7 @@
     const originalHeight = '48px';
     messageInput.addEventListener('focus', () => {
         if (messageInput.value.trim() !== '') {
-            messageInput.style.height = '200px';
+            messageInput.style.height = '150px';
             chatBubbles.scrollTop = chatBubbles.scrollHeight;
         }
     });
@@ -830,7 +827,7 @@
     });
     messageInput.addEventListener('input', () => {
         if (document.activeElement === messageInput && messageInput.value.trim() !== '') {
-            messageInput.style.height = '200px';
+            messageInput.style.height = '150px';
             chatBubbles.scrollTop = chatBubbles.scrollHeight;
         } else if (document.activeElement !== messageInput) {
             messageInput.style.height = originalHeight;
@@ -853,23 +850,14 @@
             abortController.abort();
             abortController = null;
             const bubbles = chatBubbles.querySelectorAll('.bubble');
-            if (bubbles.length >= 2) {
-                chatBubbles.removeChild(bubbles[bubbles.length - 1]);
-                chatBubbles.removeChild(bubbles[bubbles.length - 2]);
-                // Remove corresponding entries from chatContext
-                if (chatContext.length >= 2) {
-                    chatContext.splice(-2);
-                } else if (chatContext.length === 1) {
-                    chatContext.pop();
-                }
-            } else if (bubbles.length === 1) {
-                chatBubbles.removeChild(bubbles[0]);
-                if (chatContext.length >= 1) {
-                    chatContext.pop();
-                }
+            const contextLen = chatContext.length;
+            if (bubbles.length > contextLen) chatBubbles.removeChild(bubbles[bubbles.length - 1]);
+            if (contextLen > 0 && chatContext[contextLen - 1].role === 'user') {
+                chatContext.pop();
+                if (chatBubbles.children.length > 0) chatBubbles.removeChild(chatBubbles.lastChild);
             }
-            // Update chatStarted flag
             chatStarted = chatContext.length > 0;
+            refreshBubbleIndices();
         }
     });
 

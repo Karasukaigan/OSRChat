@@ -12,12 +12,16 @@ class ComfyUIClient:
     def __init__(
             self, 
             base_url: str = "http://127.0.0.1:8188/", 
+            aspect_ratio: str = "portrait",
             type: str = "zit", 
             diffusion: str = "z_image_turbo_bf16.safetensors",
             clip: str = "qwen_3_4b.safetensors",
             vae: str = "ae.safetensors"
         ) -> None:
         self.base_url = (base_url or "").rstrip("/")
+        self.aspect_ratio = (aspect_ratio or "portrait").lower()
+        if self.aspect_ratio not in {"portrait", "landscape", "square"}:
+            self.aspect_ratio = "portrait"
         self.type = (type.strip() or "zit").lower()
         if self.type not in {"zit", "sdxl"}:
             self.type = "zit"
@@ -60,8 +64,17 @@ class ComfyUIClient:
         self._apply_models(workflow)
         if prompt:
             self._apply_prompt(workflow, prompt)
-        if width and height:
-            self._apply_size(workflow, width, height)
+        if width is None or height is None:
+            ar = (self.aspect_ratio or "portrait").lower()
+            if ar == "landscape":
+                w, h = 1280, 960
+            elif ar == "square":
+                w, h = 1024, 1024
+            else:
+                w, h = 960, 1280
+            width = width or w
+            height = height or h
+        self._apply_size(workflow, width, height)
         prompt_id = await self._submit_workflow(workflow)
         if not prompt_id:
             return ""

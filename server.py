@@ -22,9 +22,9 @@ from src.joystick import JoystickController
 from src.llm_client import LLMClient
 from src.comfyui import ComfyUIClient
 
-version_info = "OSRChat v1.4.2"
+version_info = "OSRChat v1.4.3"
 PORT = 12333
-app = FastAPI(title="OSRChat", version="1.4.2")
+app = FastAPI(title="OSRChat", version="1.4.3")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 public_dir = os.path.join(BASE_DIR, "public")
@@ -172,6 +172,7 @@ async def get_llm_config():
 @app.post("/api/config/comfyui")
 async def set_comfyui_config(
     url: str = Body(""),
+    aspect_ratio: str = Body("portrait"),
     type_: str = Body("", alias="type"),
     diffusion: str = Body(""),
     clip: str = Body(""),
@@ -181,6 +182,8 @@ async def set_comfyui_config(
     global comfyui_client
     if url != os.getenv("COMFYUI_URL"):
         set_key(".env", "COMFYUI_URL", url)
+    if aspect_ratio != os.getenv("COMFYUI_ASPECT_RATIO"):
+        set_key(".env", "COMFYUI_ASPECT_RATIO", aspect_ratio)
     if type_ != os.getenv("COMFYUI_TYPE"):
         set_key(".env", "COMFYUI_TYPE", type_)
     if diffusion != os.getenv("COMFYUI_diffusion"):
@@ -192,6 +195,7 @@ async def set_comfyui_config(
     load_dotenv(override=True)
     comfyui_client = ComfyUIClient(
         os.getenv("COMFYUI_URL", ""),
+        os.getenv("COMFYUI_ASPECT_RATIO", "portrait"),
         os.getenv("COMFYUI_TYPE", ""),
         os.getenv("COMFYUI_diffusion", ""),
         os.getenv("COMFYUI_CLIP", ""),
@@ -200,6 +204,7 @@ async def set_comfyui_config(
     return {
         "message": "ComfyUI configuration updated successfully",
         "url": comfyui_client.base_url,
+        "aspect_ratio": os.getenv("COMFYUI_ASPECT_RATIO", "portrait"),
         "type": comfyui_client.type,
         "diffusion": comfyui_client.diffusion,
         "clip": comfyui_client.clip,
@@ -211,6 +216,7 @@ async def get_comfyui_config():
     """Get current ComfyUI configuration"""
     return {
         "url": os.getenv("COMFYUI_URL", ""),
+        "aspect_ratio": os.getenv("COMFYUI_ASPECT_RATIO", "portrait"),
         "type": os.getenv("COMFYUI_TYPE", ""),
         "diffusion": os.getenv("COMFYUI_diffusion", ""),
         "clip": os.getenv("COMFYUI_CLIP", ""),
@@ -385,8 +391,8 @@ async def chat_with_llm(
     image_base64: str = Body(None),
     system_prompt: str = Body(""),
     context_messages: list = Body(None),
-    temperature: float = Body(0.7),
-    num_predict: int = Body(8000)
+    temperature: float = Body(1),
+    num_predict: int = Body(32000)
 ):
     """Chat with interruptible streaming"""
     async def generate_stream():

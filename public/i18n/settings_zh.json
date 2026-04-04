@@ -38,5 +38,9 @@
   "VAE Model": "VAE模型",
   "Clear Image Cache": "清除图像缓存",
   "Image cache cleared successfully": "图像缓存清除成功",
-  "Failed to clear cache": "清除缓存失败"
+  "Failed to clear cache": "清除缓存失败",
+  "Image Aspect Ratio": "图片比例",
+  "Portrait": "纵向",
+  "Landscape": "横向",
+  "Square": "正方形"
 }

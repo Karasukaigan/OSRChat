@@ -41,6 +41,8 @@ python server.py
 
 2. The current prompts are not perfect, so you may need to test and adjust them yourself.
 
+3. If you want to try the text-to-image feature, make sure the correct model exists on the ComfyUI server and that the model name is entered correctly, for example `SDXL\illustrij_v18.safetensors`. Also ensure the port is configured properly. It is recommended to use the latest version of ComfyUI and deploy it from source rather than using ComfyUI Portable. In addition, before submitting the workflow, it is best to preload the required models into VRAM or system memory to avoid request timeouts caused by slow model loading.
+
 ## Contributing
 
 [Issues](https://github.com/Karasukaigan/OSRChat/issues) and [Pull Requests](https://github.com/Karasukaigan/OSRChat/pulls) are welcome to help improve this project.

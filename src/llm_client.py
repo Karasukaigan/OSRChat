@@ -80,7 +80,7 @@ class LLMClient:
         system_prompt: str = "",
         context_messages: Optional[List[Dict]] = None,
         temperature: float = 1,
-        num_predict: int = 8000,
+        num_predict: int = 32000,
         think: bool = True,
         stop_event: Optional[threading.Event] = None,
     ) -> Generator[str, None, None]:

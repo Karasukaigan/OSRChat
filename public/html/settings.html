@@ -93,6 +93,23 @@
                     <input type="text" id="comfyUrl" name="url" placeholder="http://127.0.0.1:8188">
                 </div>
                 <div class="form-group">
+                    <label tr>Image Aspect Ratio</label>
+                    <div class="radio-group">
+                        <div class="radio-option">
+                            <input type="radio" id="aspectPortrait" name="aspectRatio" value="portrait" checked>
+                            <label for="aspectPortrait" tr>Portrait</label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="aspectLandscape" name="aspectRatio" value="landscape">
+                            <label for="aspectLandscape" tr>Landscape</label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="aspectSquare" name="aspectRatio" value="square">
+                            <label for="aspectSquare" tr>Square</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
                     <label tr>Model Type</label>
                     <div class="radio-group">
                         <div class="radio-option">
@@ -285,6 +302,10 @@
             const response = await fetch('/api/config/comfyui?t=' + Date.now());
             const config = await response.json();
             if (config.url) document.getElementById('comfyUrl').value = config.url;
+            const aspectValue = (config.aspect_ratio || 'portrait').toLowerCase();
+            document.getElementById('aspectPortrait').checked = aspectValue === 'portrait';
+            document.getElementById('aspectLandscape').checked = aspectValue === 'landscape';
+            document.getElementById('aspectSquare').checked = aspectValue === 'square';
             const typeValue = (config.type || '').toLowerCase();
             if (typeValue === 'sdxl') {
                 document.getElementById('comfyTypeSdxl').checked = true;
@@ -361,11 +382,12 @@
     document.getElementById('comfyuiConfigForm')?.addEventListener('submit', async function (e) {
         e.preventDefault();
         const url = document.getElementById('comfyUrl').value.trim();
+        const aspectRatio = document.querySelector('input[name="aspectRatio"]:checked')?.value || 'portrait';
         const diffusion = document.getElementById('comfyDiffusion').value.trim();
         const clip = document.getElementById('comfyClip').value.trim();
         const vae = document.getElementById('comfyVae').value.trim();
         const type = document.querySelector('input[name="comfyType"]:checked')?.value || '';
-        const requestBody = { url, type, diffusion, clip, vae };
+        const requestBody = { url, type, diffusion, clip, vae, aspect_ratio: aspectRatio };
         await fetchWithToast('/api/config/comfyui', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
